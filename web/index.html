@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QL-570 Label Designer</title>
+<style>
+:root {
+  --bg: #f4f5f7;
+  --panel: #ffffff;
+  --ink: #1a1d21;
+  --muted: #6b7280;
+  --line: #e2e5ea;
+  --accent: #1f6feb;
+  --accent-ink: #ffffff;
+  --danger: #c5221f;
+  --ok: #188038;
+  --radius: 10px;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+header .spacer { flex: 1; }
+header label { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 6px; }
+header input[type=password] {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 13px;
+  width: 160px;
+}
+main {
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) minmax(300px, 420px);
+  gap: 16px;
+  padding: 16px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+@media (max-width: 820px) {
+  main { grid-template-columns: 1fr; }
+}
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.panel h2 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--muted);
+}
+fieldset { border: 0; padding: 0; margin: 0 0 14px; }
+legend {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 4px;
+  width: 100%;
+}
+label { display: block; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+input[type=text], input[type=number], input[type=password], select, textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 9px;
+  font: inherit;
+  background: #fff;
+}
+input[type=text]:focus, input[type=number]:focus, select:focus, textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: var(--accent);
+}
+textarea { resize: vertical; min-height: 40px; }
+.row { display: flex; align-items: center; gap: 8px; }
+.row input { flex: 1; }
+.row .remove {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  color: var(--danger);
+  font-size: 15px;
+  line-height: 1;
+}
+.row .remove:hover { background: #fdecea; }
+button {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 6px;
+  padding: 7px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+button:hover { background: #f6f7f9; }
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+button.primary:hover { background: #1a5fca; }
+button.primary:disabled { background: #9db9e8; border-color: #9db9e8; cursor: not-allowed; }
+button.small { padding: 4px 10px; font-size: 13px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button {
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-radius: 0;
+  padding: 6px 14px;
+  background: #fff;
+}
+.seg button:last-child { border-right: 0; }
+.seg button.active { background: var(--accent); color: var(--accent-ink); }
+details.advanced { margin-top: 6px; }
+details.advanced summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 4px 0;
+  user-select: none;
+}
+details.advanced[open] summary { margin-bottom: 10px; }
+.checkline { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 14px; }
+.checkline input { accent-color: var(--accent); }
+.checkline .hint { color: var(--muted); font-size: 12px; margin-left: auto; }
+.slider { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+.slider input[type=range] { flex: 1; accent-color: var(--accent); }
+.slider .val { min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
+.dropzone {
+  border: 2px dashed var(--line);
+  border-radius: var(--radius);
+  padding: 22px 14px;
+  text-align: center;
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.dropzone.dragover { border-color: var(--accent); background: #f0f6ff; }
+.dropzone img {
+  display: block;
+  max-width: 100%;
+  max-height: 120px;
+  margin: 8px auto 4px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: repeating-conic-gradient(#eee 0 25%, #fff 0 50%) 0 0 / 16px 16px;
+}
+#status-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #9aa0a6;
+  margin-right: 6px;
+}
+#status-dot.online { background: var(--ok); }
+#status-dot.printing { background: #f9ab00; }
+#status-dot.offline { background: var(--danger); }
+#status-dot.error { background: var(--danger); }
+table.info { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.info td { padding: 3px 0; border-bottom: 1px solid #f0f1f3; }
+table.info td:first-child { color: var(--muted); width: 42%; }
+table.info td:last-child { text-align: right; }
+.status-errors {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #fdecea;
+  color: var(--danger);
+  font-size: 13px;
+}
+.preview-wrap {
+  background: #d7dbe0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  justify-content: center;
+  min-height: 140px;
+  align-items: center;
+}
+.label-frame {
+  background: #fff;
+  border: 1px solid #c3c8cf;
+  box-shadow: 0 2px 6px rgba(0,0,0,.12);
+  border-radius: 3px;
+  width: 100%;
+  max-width: 300px;
+  overflow: hidden;
+  position: relative;
+}
+.label-frame img { width: 100%; height: 100%; object-fit: fill; display: block; }
+.preview-msg { color: var(--muted); font-size: 13px; text-align: center; padding: 10px; }
+.preview-msg.error { color: var(--danger); }
+.preview-meta { font-size: 12px; color: var(--muted); margin-top: 8px; text-align: center; }
+#print-btn-wrap { display: flex; gap: 10px; }
+#print-btn-wrap button { flex: 1; padding: 10px; font-size: 15px; }
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  vertical-align: -2px;
+  margin-right: 6px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  background: #202124;
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  max-width: 80vw;
+  box-shadow: 0 4px 14px rgba(0,0,0,.25);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s;
+  z-index: 100;
+}
+#toast.show { opacity: 1; }
+#toast.ok { background: var(--ok); }
+#toast.err { background: var(--danger); }
+footer { text-align: center; color: var(--muted); font-size: 12px; padding: 0 16px 20px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>QL-570 Label Designer</h1>
+  <div class="spacer"></div>
+  <label>token <input type="password" id="token" placeholder="Bearer token" autocomplete="off"></label>
+</header>
+
+<main>
+  <div>
+    <section class="panel" id="designer">
+      <h2>Label Designer</h2>
+
+      <fieldset>
+        <legend>Media</legend>
+        <select id="media"></select>
+      </fieldset>
+
+      <fieldset>
+        <legend>Text lines (top to bottom)</legend>
+        <div id="text-lines"></div>
+        <button class="small" id="add-line" type="button">+ add line</button>
+      </fieldset>
+
+      <div class="grid2">
+        <fieldset>
+          <legend>QR code content</legend>
+          <input type="text" id="qr" placeholder="https://…">
+        </fieldset>
+        <fieldset>
+          <legend>Barcode (Code128)</legend>
+          <input type="text" id="barcode" placeholder="ABC-1234">
+        </fieldset>
+      </div>
+
+      <fieldset>
+        <legend>Image</legend>
+        <div class="dropzone" id="dropzone">
+          <span id="dz-hint">Drop an image here or click to upload</span>
+          <img id="thumb" alt="" hidden>
+          <div id="dz-name" hidden></div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Font size</legend>
+        <div class="slider">
+          <input type="range" id="font-size" min="4" max="72" step="1" value="10">
+          <span class="val" id="font-size-val">10</span>
+        </div>
+      </fieldset>
+
+      <div class="grid2">
+        <fieldset>
+          <legend>Alignment</legend>
+          <div class="seg" id="align-seg">
+            <button type="button" data-align="left" class="active">Left</button>
+            <button type="button" data-align="center">Center</button>
+            <button type="button" data-align="right">Right</button>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Rotate</legend>
+          <select id="rotate">
+            <option value="0">0&deg;</option>
+            <option value="90">90&deg;</option>
+            <option value="180">180&deg;</option>
+            <option value="270">270&deg;</option>
+          </select>
+        </fieldset>
+      </div>
+
+      <div class="grid2">
+        <fieldset>
+          <legend>Top margin (mm)</legend>
+          <input type="number" id="margin-top" min="0" max="500" step="1" value="0">
+        </fieldset>
+        <fieldset>
+          <legend>Bottom margin (mm)</legend>
+          <input type="number" id="margin-bottom" min="0" max="500" step="1" value="0">
+        </fieldset>
+      </div>
+
+      <div class="grid2">
+        <fieldset>
+          <legend>Cable wrap</legend>
+          <label class="checkline">
+            <input type="checkbox" id="cable">
+            wrap label around cable
+          </label>
+        </fieldset>
+        <fieldset>
+          <legend>Cable factor</legend>
+          <input type="number" id="cable-factor" min="1" max="10" step="0.1" value="2.5" disabled>
+        </fieldset>
+      </div>
+
+      <div class="grid3">
+        <fieldset>
+          <legend>Copies</legend>
+          <input type="number" id="copies" min="1" max="255" step="1" value="1">
+        </fieldset>
+        <fieldset>
+          <legend>Auto cut</legend>
+          <label class="checkline">
+            <input type="checkbox" id="cut" checked>
+            cut after print
+          </label>
+        </fieldset>
+        <fieldset>
+          <legend>Cut every</legend>
+          <input type="number" id="cut-every" min="1" max="255" step="1" value="1">
+        </fieldset>
+      </div>
+
+      <details class="advanced">
+        <summary>Advanced</summary>
+        <fieldset>
+          <legend>Dithering</legend>
+          <label class="checkline">
+            <input type="checkbox" id="dither">
+            Floyd-Steinberg dithering
+          </label>
+          <div class="slider">
+            <input type="range" id="threshold" min="0" max="100" step="1" value="50">
+            <span class="val" id="threshold-val">50%</span>
+          </div>
+        </fieldset>
+        <div class="grid2">
+          <label class="checkline">
+            <input type="checkbox" id="mirror">
+            mirror label
+          </label>
+          <label class="checkline">
+            <input type="checkbox" id="hires">
+            600 dpi length (hires)
+          </label>
+        </div>
+      </details>
+    </section>
+  </div>
+
+  <div>
+    <section class="panel">
+      <h2>Printer Status</h2>
+      <div id="status-line"><span id="status-dot"></span><span id="status-text">connecting…</span></div>
+      <table class="info">
+        <tbody>
+          <tr><td>model</td><td id="st-model">—</td></tr>
+          <tr><td>media type</td><td id="st-media-type">—</td></tr>
+          <tr><td>media width</td><td id="st-media-width">—</td></tr>
+          <tr><td>media length</td><td id="st-media-length">—</td></tr>
+          <tr><td>phase</td><td id="st-phase">—</td></tr>
+          <tr><td>notification</td><td id="st-notification">—</td></tr>
+        </tbody>
+      </table>
+      <div id="st-errors" class="status-errors" hidden></div>
+    </section>
+
+    <section class="panel">
+      <h2>Preview</h2>
+      <div class="preview-wrap">
+        <div class="label-frame" id="label-frame" hidden>
+          <img id="preview-img" alt="label preview">
+        </div>
+        <div class="preview-msg" id="preview-msg">Type some text to see the preview.</div>
+      </div>
+      <div class="preview-meta" id="preview-meta"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Print</h2>
+      <div id="print-btn-wrap">
+        <button class="primary" id="print-btn" type="button">Print label</button>
+      </div>
+    </section>
+  </div>
+</main>
+<footer>ql570 embedded UI — jobs are sent to the local print daemon.</footer>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+const MEDIA = [
+  { id: "12",     label: "12 mm continuous" },
+  { id: "29",     label: "29 mm continuous" },
+  { id: "38",     label: "38 mm continuous" },
+  { id: "50",     label: "50 mm continuous" },
+  { id: "54",     label: "54 mm continuous" },
+  { id: "62",     label: "62 mm continuous" },
+  { id: "17x54",  label: "17×54 mm die-cut" },
+  { id: "17x87",  label: "17×87 mm die-cut" },
+  { id: "23x23",  label: "23×23 mm die-cut" },
+  { id: "29x90",  label: "29×90 mm die-cut" },
+  { id: "38x90",  label: "38×90 mm die-cut" },
+  { id: "39x48",  label: "39×48 mm die-cut" },
+  { id: "52x29",  label: "52×29 mm die-cut" },
+  { id: "62x29",  label: "62×29 mm die-cut" },
+  { id: "62x100", label: "62×100 mm die-cut" },
+  { id: "d12",    label: "12 mm round" },
+  { id: "d24",    label: "24 mm round" },
+  { id: "d58",    label: "58 mm round" },
+];
+
+const $ = (id) => document.getElementById(id);
+
+let previewSeq = 0;
+let uploadedImage = null; // { path, name, objectUrl }
+
+// ---- token ---------------------------------------------------------------
+const tokenInput = $("token");
+tokenInput.value = localStorage.getItem("ql570_token") || "";
+tokenInput.addEventListener("input", () => localStorage.setItem("ql570_token", tokenInput.value));
+
+async function apiFetch(path, options = {}) {
+  const opts = { ...options };
+  const token = tokenInput.value.trim();
+  if (token) {
+    opts.headers = { ...(opts.headers || {}), Authorization: "Bearer " + token };
+  }
+  const res = await fetch(path, opts);
+  if (res.status === 401) {
+    throw new Error("unauthorized — check the token field");
+  }
+  return res;
+}
+
+// ---- toast ---------------------------------------------------------------
+let toastTimer;
+function toast(msg, kind = "") {
+  const el = $("toast");
+  el.textContent = msg;
+  el.className = "show " + kind;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ""; }, 4000);
+}
+
+// ---- status --------------------------------------------------------------
+function setStatusDot(cls) {
+  const dot = $("status-dot");
+  dot.className = "";
+  if (cls) dot.classList.add(cls);
+}
+
+async function pollStatus() {
+  try {
+    const res = await apiFetch("/v1/status");
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const st = await res.json();
+    $("st-model").textContent = st.model || "—";
+    $("st-media-type").textContent = st.media_type_name || "—";
+    $("st-media-width").textContent = st.media_width_mm ? st.media_width_mm + " mm" : "—";
+    $("st-media-length").textContent = st.media_length_mm ? st.media_length_mm + " mm" : "—";
+    $("st-phase").textContent = st.phase_type_name || "—";
+    $("st-notification").textContent = st.notification_name || "—";
+    const errs = (st.errors && st.errors.length) ? st.errors : [];
+    const errBox = $("st-errors");
+    if (errs.length) {
+      errBox.hidden = false;
+      errBox.textContent = errs.join(" · ");
+    } else {
+      errBox.hidden = true;
+    }
+    const phase = (st.phase_type_name || "").toLowerCase();
+    if (errs.length) {
+      setStatusDot("error");
+      $("status-text").textContent = "printer error";
+    } else if (phase.includes("print")) {
+      setStatusDot("printing");
+      $("status-text").textContent = "printing";
+    } else {
+      setStatusDot("online");
+      $("status-text").textContent = "online";
+    }
+    // If the printer reports a media type, preselect the matching media.
+    if (st.media_type_name) maybeMatchMedia(st);
+  } catch (e) {
+    setStatusDot("offline");
+    $("status-text").textContent = "offline — " + e.message;
+  }
+}
+
+function maybeMatchMedia(st) {
+  const mediaSel = $("media");
+  if (mediaSel.dataset.matched === "1") return;
+  const width = st.media_width_mm;
+  const m = MEDIA.find((x) => {
+    const parts = x.id.match(/^(\d+)x(\d+)$/);
+    if (parts) {
+      return parseInt(parts[1], 10) === width && parseInt(parts[2], 10) === st.media_length_mm;
+    }
+    if (x.id.startsWith("d")) {
+      return parseInt(x.id.slice(1), 10) === width;
+    }
+    return parseInt(x.id, 10) === width && (st.media_type_name || "").toLowerCase().includes("continuous");
+  });
+  if (m) {
+    mediaSel.value = m.id;
+    mediaSel.dataset.matched = "1";
+    schedulePreview();
+  }
+}
+
+// ---- designer ------------------------------------------------------------
+const mediaSel = $("media");
+for (const m of MEDIA) {
+  const opt = document.createElement("option");
+  opt.value = m.id;
+  opt.textContent = m.label;
+  mediaSel.appendChild(opt);
+}
+mediaSel.value = "29";
+
+const textLines = $("text-lines");
+function addTextLine(value = "") {
+  const row = document.createElement("div");
+  row.className = "row";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = value;
+  input.placeholder = "label text";
+  const rm = document.createElement("button");
+  rm.type = "button";
+  rm.className = "remove";
+  rm.textContent = "×";
+  rm.title = "remove line";
+  rm.addEventListener("click", () => {
+    row.remove();
+    schedulePreview();
+  });
+  row.appendChild(input);
+  row.appendChild(rm);
+  textLines.appendChild(row);
+  input.addEventListener("input", schedulePreview);
+  if (!value) input.focus();
+}
+$("add-line").addEventListener("click", () => addTextLine());
+
+// ---- image upload --------------------------------------------------------
+const dropzone = $("dropzone");
+function setUploadedImage(file) {
+  if (uploadedImage && uploadedImage.objectUrl) URL.revokeObjectURL(uploadedImage.objectUrl);
+  uploadedImage = {
+    path: null,
+    name: file.name,
+    objectUrl: URL.createObjectURL(file),
+  };
+  const thumb = $("thumb");
+  thumb.src = uploadedImage.objectUrl;
+  thumb.hidden = false;
+  const name = $("dz-name");
+  name.hidden = false;
+  name.textContent = file.name + " — uploading…";
+  $("dz-hint").hidden = true;
+  schedulePreview();
+}
+
+async function uploadImage(file) {
+  const fd = new FormData();
+  fd.append("file", file);
+  try {
+    const res = await apiFetch("/v1/upload", { method: "POST", body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "upload failed");
+    uploadedImage.path = data.path;
+    $("dz-name").textContent = file.name + " — uploaded (double-click to remove)";
+    schedulePreview();
+  } catch (e) {
+    $("dz-name").textContent = "upload failed: " + e.message;
+    toast("Upload failed: " + e.message, "err");
+  }
+}
+
+dropzone.addEventListener("click", () => {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/png,image/jpeg,image/gif";
+  input.addEventListener("change", () => {
+    const f = input.files && input.files[0];
+    if (f) {
+      setUploadedImage(f);
+      uploadImage(f);
+    }
+  });
+  input.click();
+});
+["dragenter", "dragover"].forEach((ev) =>
+  dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.add("dragover"); })
+);
+["dragleave", "drop"].forEach((ev) =>
+  dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.remove("dragover"); })
+);
+dropzone.addEventListener("drop", (e) => {
+  const f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) { setUploadedImage(f); uploadImage(f); }
+});
+dropzone.addEventListener("dblclick", (e) => {
+  e.stopPropagation();
+  if (!uploadedImage) return;
+  if (uploadedImage.objectUrl) URL.revokeObjectURL(uploadedImage.objectUrl);
+  uploadedImage = null;
+  $("thumb").hidden = true;
+  $("thumb").src = "";
+  $("dz-name").hidden = true;
+  $("dz-hint").hidden = false;
+  schedulePreview();
+});
+
+// ---- controls ------------------------------------------------------------
+const fontSize = $("font-size");
+const fontSizeVal = $("font-size-val");
+fontSize.addEventListener("input", () => {
+  fontSizeVal.textContent = fontSize.value;
+  schedulePreview();
+});
+
+const seg = $("align-seg");
+let align = "left";
+seg.addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-align]");
+  if (!btn) return;
+  align = btn.dataset.align;
+  for (const b of seg.querySelectorAll("button")) b.classList.toggle("active", b === btn);
+  schedulePreview();
+});
+
+const cableBox = $("cable");
+const cableFactor = $("cable-factor");
+cableBox.addEventListener("change", () => {
+  cableFactor.disabled = !cableBox.checked;
+  schedulePreview();
+});
+
+const threshold = $("threshold");
+const thresholdVal = $("threshold-val");
+threshold.addEventListener("input", () => {
+  thresholdVal.textContent = threshold.value + "%";
+  schedulePreview();
+});
+
+const simpleInputs = [
+  "media", "qr", "barcode", "rotate", "margin-top", "margin-bottom",
+  "cable-factor", "copies", "cut", "cut-every", "dither", "mirror", "hires",
+];
+for (const id of simpleInputs) {
+  $(id).addEventListener("input", schedulePreview);
+  $(id).addEventListener("change", schedulePreview);
+}
+
+// ---- job model -----------------------------------------------------------
+function currentJob() {
+  const lines = [];
+  for (const input of textLines.querySelectorAll("input")) {
+    if (input.value.trim()) lines.push(input.value.trim());
+  }
+  const num = (id) => parseFloat($(id).value) || 0;
+  const job = {
+    media: mediaSel.value,
+    text: lines,
+    qr: $("qr").value.trim(),
+    barcode: $("barcode").value.trim(),
+    image: uploadedImage && uploadedImage.path ? uploadedImage.path : "",
+    font_size: parseFloat(fontSize.value) || 10,
+    align: align,
+    rotate: parseInt($("rotate").value, 10) || 0,
+    margin_top_mm: num("margin-top"),
+    margin_bottom_mm: num("margin-bottom"),
+    cable: cableBox.checked,
+    cable_factor: parseFloat(cableFactor.value) || 2.5,
+    copies: parseInt($("copies").value, 10) || 1,
+    cut: $("cut").checked,
+    cut_every: parseInt($("cut-every").value, 10) || 1,
+    dither: $("dither").checked,
+    threshold: parseInt(threshold.value, 10) || 0,
+    mirror: $("mirror").checked,
+    hires: $("hires").checked,
+  };
+  return job;
+}
+
+// ---- preview -------------------------------------------------------------
+let previewTimer;
+function schedulePreview() {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(refreshPreview, 250);
+}
+
+async function refreshPreview() {
+  const job = currentJob();
+  const seq = ++previewSeq;
+  try {
+    const res = await apiFetch("/v1/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(job),
+    });
+    if (!res.ok) {
+      let msg = "preview failed (HTTP " + res.status + ")";
+      try {
+        const data = await res.json();
+        if (data.error) msg = data.error;
+      } catch (_) { /* not JSON */ }
+      throw new Error(msg);
+    }
+    const blob = await res.blob();
+    if (seq !== previewSeq) return; // a newer preview superseded this one
+    const url = URL.createObjectURL(blob);
+    const img = $("preview-img");
+    const old = img.src;
+    img.onload = () => {
+      if (old && old.startsWith("blob:")) URL.revokeObjectURL(old);
+      const frame = $("label-frame");
+      const scale = job.hires ? 2 : 1;
+      const ar = img.naturalWidth / (img.naturalHeight / scale);
+      frame.style.aspectRatio = String(ar);
+      frame.hidden = false;
+      $("preview-msg").hidden = true;
+      const wMM = mediaWidthMM(job.media);
+      const hMM = (img.naturalHeight / scale) * 25.4 / 300;
+      $("preview-meta").textContent =
+        "≈ " + wMM + " mm × " + hMM.toFixed(1) + " mm · " +
+        img.naturalWidth + "×" + img.naturalHeight + " px";
+    };
+    img.src = url;
+  } catch (e) {
+    if (seq !== previewSeq) return;
+    const msg = $("preview-msg");
+    msg.hidden = false;
+    msg.className = "preview-msg error";
+    msg.textContent = e.message;
+    $("label-frame").hidden = true;
+    $("preview-meta").textContent = "";
+  }
+}
+
+function mediaWidthMM(id) {
+  const parts = id.match(/^(\d+)x(\d+)$/);
+  if (parts) return parseInt(parts[1], 10);
+  if (id.startsWith("d")) return parseInt(id.slice(1), 10);
+  return parseInt(id, 10) || 0;
+}
+
+// ---- print ---------------------------------------------------------------
+const printBtn = $("print-btn");
+printBtn.addEventListener("click", async () => {
+  printBtn.disabled = true;
+  printBtn.innerHTML = '<span class="spinner"></span>Printing…';
+  try {
+    const res = await apiFetch("/v1/print", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(currentJob()),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "print failed (HTTP " + res.status + ")");
+    toast("Print job accepted" + (data.ready ? " — printer ready" : ""), "ok");
+  } catch (e) {
+    toast(e.message, "err");
+  } finally {
+    printBtn.disabled = false;
+    printBtn.textContent = "Print label";
+  }
+});
+
+// ---- init ----------------------------------------------------------------
+addTextLine("");
+pollStatus();
+setInterval(pollStatus, 5000);
+refreshPreview();
+</script>
+</body>
+</html>

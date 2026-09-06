@@ -1,0 +1,30 @@
+# ql570 print daemon + web UI.
+#
+# Host requirements:
+#   - the usblp kernel module loaded (persist via /etc/modules-load.d/usblp.conf):
+#       sudo modprobe usblp
+#   - the container needs access to the USB bus (mapped below).
+#
+# Optional: set QL570_TOKEN to require an Authorization: Bearer header in
+# the web UI and on /v1/* API calls.
+#
+#   QL570_TOKEN=secret docker compose up -d
+#
+# Then open http://<host-ip>:9101
+#
+# The container starts even when the printer is switched off or unplugged;
+# it reconnects every 10 seconds and reports "printer not connected" until
+# then.
+
+services:
+  ql570:
+    build: .
+    image: ql570:latest
+    container_name: ql570
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
+    ports:
+      - "9101:9101"
+    environment:
+      QL570_TOKEN: ${QL570_TOKEN:-}
+    restart: unless-stopped

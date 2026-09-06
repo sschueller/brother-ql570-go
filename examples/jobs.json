@@ -1,0 +1,19 @@
+[
+  {
+    "text": ["SW-01 uplink"],
+    "qr": "https://nms.example.com/devices/sw-01"
+  },
+  {
+    "text": ["SW-02 uplink"],
+    "barcode": "123456789"
+  },
+  {
+    "image": "my-logo.png",
+    "algin": "center"
+  },  
+  {
+    "text": ["eth1/1 -> eth1/2", "VLAN 10,20,30", "10G"],
+    "cable": true,
+    "copies": 1
+  }
+]

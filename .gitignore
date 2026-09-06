@@ -1,0 +1,6 @@
+/ql570
+/bin/
+/dist/
+*.bin
+*.png.out
+.kilo/

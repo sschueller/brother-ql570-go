@@ -1,0 +1,27 @@
+{
+  "media": "29mm",
+  "text": [
+    "SW-01 uplink",
+    "eth1/1 -> eth1/2"
+  ],
+  "qr": "https://nms.example.com/devices/sw-01",
+  "barcode": "ABC-123456",
+  "font": "",
+  "font_size": 10,
+  "length_mm": 80,
+  "copies": 1,
+  "cut": true,
+  "cut_every": 1,
+  "mirror": false,
+  "rotate": 0,
+  "margin_top_mm": 0,
+  "margin_bottom_mm": 0,
+  "align": "left",
+  "compress": "none",
+  "dither": false,
+  "threshold": 50,
+  "hires": false,
+  "feed_dots": 0,
+  "quality": true,
+  "device": ""
+}
