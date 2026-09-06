@@ -410,3 +410,9 @@ make docker-build        # daemon Docker image (web UI embedded)
 
 All dependencies are pure Go: `golang.org/x/image` (fonts/raster),
 `github.com/skip2/go-qrcode`, `github.com/boombuler/barcode`.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch workflow, conventional
+commit format, testing requirements, and the automated release process.
+
