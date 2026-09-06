@@ -172,6 +172,20 @@ application can share struct definitions with the library. The body may be
 a single job object or an array of jobs — one label per entry, printed as
 pages of a single job. All entries must use the same media.
 
+### Series labels
+
+The web UI expands Bash-style brace ranges in text lines, QR content and
+barcode content, so one design can print a numbered series:
+
+- `{1..10}` → `1`…`10`; `{01..10}` → `01`…`10` (zero-padded to the widest
+  number); `{1..10..2}` → `1,3,5,7,9`; `{10..1}` counts down.
+- `SW-{01..10}` in a text line prints ten labels (`SW-01` … `SW-10`),
+  posted to `/v1/print` as a job array (one label per entry).
+- Multiple ranges must share one count (e.g. `SW-{1..3} port {1..3}`);
+  fields without a range stay constant, and every label keeps the UI Copies
+  value (copies 2 = two of each). Maximum 1000 labels per series.
+- The preview shows the first label, with "label 1 of N" in the meta line.
+
 ## Docker
 
 The daemon runs in a container, e.g. on a Raspberry Pi (ARM64). The image

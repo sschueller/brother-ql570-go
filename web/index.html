@@ -198,6 +198,13 @@ details.advanced[open] summary { margin-bottom: 10px; }
 .checkline { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 14px; }
 .checkline input { accent-color: var(--accent); }
 .checkline .hint { color: var(--muted); font-size: 12px; margin-left: auto; }
+.field-hint { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
+.field-hint code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--line-soft);
+  padding: 1px 4px;
+  border-radius: 4px;
+}
 .slider { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
 .slider input[type=range] { flex: 1; accent-color: var(--accent); }
 .slider .val { min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
@@ -340,6 +347,7 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 0 16
         <legend>Text lines (top to bottom)</legend>
         <div id="text-lines"></div>
         <button class="small" id="add-line" type="button">+ add line</button>
+        <p class="field-hint">Series: use <code>{1..10}</code> to print numbered labels — e.g. <code>SW-{01..10}</code> (text, QR and barcode all expand).</p>
       </fieldset>
 
       <div class="grid2">
@@ -812,6 +820,101 @@ function currentJob() {
   return job;
 }
 
+// ---- series expansion ----------------------------------------------------
+const MAX_SERIES = 1000;
+
+function parseRange(token) {
+  const m = token.match(/^\{(\d+)\.\.(\d+)(?:\.\.(\d+))?\}$/);
+  if (!m) {
+    throw new Error('invalid series range "' + token + '" — use {start..end} (integers) with optional ..step');
+  }
+  const startStr = m[1];
+  const endStr = m[2];
+  const stepStr = m[3];
+  const start = parseInt(startStr, 10);
+  const end = parseInt(endStr, 10);
+  let step = 1;
+  if (stepStr !== undefined) {
+    step = parseInt(stepStr, 10);
+    if (step <= 0) throw new Error('series step must be a positive integer, got "' + stepStr + '"');
+  }
+  const dir = start <= end ? 1 : -1;
+  const count = Math.floor(Math.abs(end - start) / step) + 1;
+  if (count > MAX_SERIES) {
+    throw new Error('series range "' + token + '" would produce ' + count + ' labels (max ' + MAX_SERIES + ')');
+  }
+  const pad = startStr.length > 1 && startStr[0] === "0" ? Math.max(startStr.length, endStr.length) : 0;
+  const values = [];
+  for (let i = 0; i < count; i++) {
+    const v = start + i * dir * step;
+    values.push(pad ? String(v).padStart(pad, "0") : String(v));
+  }
+  return { values, count };
+}
+
+function expandField(str) {
+  const re = /\{[^}]+\}/g;
+  const matches = [];
+  let m;
+  while ((m = re.exec(str)) !== null) {
+    matches.push({ index: m.index, length: m[0].length, range: parseRange(m[0]) });
+  }
+  if (matches.length === 0) return [str];
+  let count = matches[0].range.count;
+  for (const x of matches) {
+    if (x.range.count !== count) {
+      throw new Error('series ranges in "' + str + '" must have equal counts (' +
+        matches.map((y) => y.range.count).join(", ") + ')');
+    }
+  }
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    let s = "";
+    let pos = 0;
+    for (const x of matches) {
+      s += str.slice(pos, x.index) + x.range.values[i];
+      pos = x.index + x.length;
+    }
+    s += str.slice(pos);
+    out.push(s);
+  }
+  return out;
+}
+
+function buildSeriesJobs() {
+  const base = currentJob();
+  const textExpanded = (base.text || []).map(expandField);
+  const qrExpanded = expandField(base.qr);
+  const barcodeExpanded = expandField(base.barcode);
+
+  let n = 1;
+  const counts = [];
+  for (const arr of textExpanded) if (arr.length > 1) counts.push(arr.length);
+  if (qrExpanded.length > 1) counts.push(qrExpanded.length);
+  if (barcodeExpanded.length > 1) counts.push(barcodeExpanded.length);
+  if (counts.length) {
+    n = counts[0];
+    for (const c of counts) {
+      if (c !== n) {
+        throw new Error('series ranges must have equal counts across fields (got ' + counts.join(", ") + ')');
+      }
+    }
+  }
+  if (n > MAX_SERIES) {
+    throw new Error('series would produce ' + n + ' labels (max ' + MAX_SERIES + ')');
+  }
+
+  const jobs = [];
+  for (let i = 0; i < n; i++) {
+    const job = { ...base };
+    job.text = textExpanded.map((arr) => (arr.length === 1 ? arr[0] : arr[i]));
+    job.qr = qrExpanded.length === 1 ? qrExpanded[0] : qrExpanded[i];
+    job.barcode = barcodeExpanded.length === 1 ? barcodeExpanded[0] : barcodeExpanded[i];
+    jobs.push(job);
+  }
+  return jobs;
+}
+
 // ---- preview -------------------------------------------------------------
 let previewTimer;
 function schedulePreview() {
@@ -820,7 +923,20 @@ function schedulePreview() {
 }
 
 async function refreshPreview() {
-  const job = currentJob();
+  let jobs;
+  try {
+    jobs = buildSeriesJobs();
+  } catch (e) {
+    const msg = $("preview-msg");
+    msg.hidden = false;
+    msg.className = "preview-msg error";
+    msg.textContent = e.message;
+    $("label-frame").hidden = true;
+    $("preview-meta").textContent = "";
+    return;
+  }
+  const job = jobs[0];
+  const n = jobs.length;
   const seq = ++previewSeq;
   try {
     const res = await apiFetch("/v1/preview", {
@@ -851,9 +967,10 @@ async function refreshPreview() {
       $("preview-msg").hidden = true;
       const wMM = mediaWidthMM(job.media);
       const hMM = (img.naturalHeight / scale) * 25.4 / 300;
-      $("preview-meta").textContent =
-        "≈ " + wMM + " mm × " + hMM.toFixed(1) + " mm · " +
+      let meta = "≈ " + wMM + " mm × " + hMM.toFixed(1) + " mm · " +
         img.naturalWidth + "×" + img.naturalHeight + " px";
+      if (n > 1) meta += " · label 1 of " + n;
+      $("preview-meta").textContent = meta;
     };
     img.src = url;
   } catch (e) {
@@ -880,14 +997,16 @@ printBtn.addEventListener("click", async () => {
   printBtn.disabled = true;
   printBtn.innerHTML = '<span class="spinner"></span>Printing…';
   try {
+    const jobs = buildSeriesJobs();
     const res = await apiFetch("/v1/print", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(currentJob()),
+      body: JSON.stringify(jobs),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || "print failed (HTTP " + res.status + ")");
-    toast("Print job accepted" + (data.ready ? " — printer ready" : ""), "ok");
+    const labelNote = jobs.length > 1 ? " — " + jobs.length + " labels" : "";
+    toast("Print job accepted" + labelNote + (data.ready ? " — printer ready" : ""), "ok");
   } catch (e) {
     toast(e.message, "err");
   } finally {
