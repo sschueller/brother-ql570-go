@@ -69,6 +69,7 @@ ql570 version
 | `--mirror` | false | mirror the label horizontally |
 | `--rotate` | 0 | rotate content 90/180/270 degrees |
 | `--margin-top` / `--margin-bottom` | 0 | content margins in mm |
+| `--margin-left` / `--margin-right` | 0 | horizontal offset/margin inside the printable width, in mm |
 | `--align` | left | `left` \| `center` \| `right` |
 | `--compress` | none | `tiff` is rejected: the QL-570 has no compression support |
 | `--dither` | false | Floyd-Steinberg dithering (photographs) |

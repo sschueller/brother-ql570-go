@@ -85,6 +85,8 @@ print flags:
   --rotate 0|90|180|270    rotate the content
   --margin-top 0           top margin in mm
   --margin-bottom 0        bottom margin in mm
+  --margin-left 0          left offset/margin in mm
+  --margin-right 0         right margin in mm
   --align left|center|right
   --compress none|tiff     tiff is rejected on the QL-570 (unsupported)
   --dither                 Floyd-Steinberg dithering
@@ -136,6 +138,7 @@ func cmdPrint(args []string) error {
 	var (
 		qr, barcode, image, font, media, device, align, compress, jobFile, dryRun string
 		fontSize, length, marginTop, marginBottom, cableFactor                    float64
+		marginLeft, marginRight                                                   float64
 		copies, cutEvery, rotate, threshold, feedDots                             int
 		cut, mirror, dither, hires, quality, cable                                bool
 	)
@@ -156,6 +159,8 @@ func cmdPrint(args []string) error {
 	fs.IntVar(&rotate, "rotate", 0, "rotate content 0/90/180/270")
 	fs.Float64Var(&marginTop, "margin-top", 0, "top margin in mm")
 	fs.Float64Var(&marginBottom, "margin-bottom", 0, "bottom margin in mm")
+	fs.Float64Var(&marginLeft, "margin-left", 0, "left offset/margin in mm")
+	fs.Float64Var(&marginRight, "margin-right", 0, "right margin in mm")
 	fs.StringVar(&align, "align", "", "left|center|right")
 	fs.StringVar(&compress, "compress", "", "none|tiff")
 	fs.BoolVar(&dither, "dither", false, "Floyd-Steinberg dithering")
@@ -177,7 +182,7 @@ func cmdPrint(args []string) error {
 	contentFlags := []string{
 		"text", "qr", "barcode", "image", "font", "font-size", "length",
 		"media", "copies", "cut", "cut-every", "mirror", "rotate",
-		"margin-top", "margin-bottom", "align", "compress", "dither",
+		"margin-top", "margin-bottom", "margin-left", "margin-right", "align", "compress", "dither",
 		"threshold", "hires", "feed-dots", "quality", "cable", "cable-factor",
 	}
 
@@ -261,6 +266,12 @@ func cmdPrint(args []string) error {
 		}
 		if set["margin-bottom"] {
 			job.MarginBottomMM = marginBottom
+		}
+		if set["margin-left"] {
+			job.MarginLeftMM = marginLeft
+		}
+		if set["margin-right"] {
+			job.MarginRightMM = marginRight
 		}
 		if set["align"] {
 			job.Align = align

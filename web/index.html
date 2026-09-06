@@ -411,6 +411,17 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 0 16
 
       <div class="grid2">
         <fieldset>
+          <legend>Left offset (mm)</legend>
+          <input type="number" id="margin-left" min="0" max="60" step="1" value="0">
+        </fieldset>
+        <fieldset>
+          <legend>Right margin (mm)</legend>
+          <input type="number" id="margin-right" min="0" max="60" step="1" value="0">
+        </fieldset>
+      </div>
+
+      <div class="grid2">
+        <fieldset>
           <legend>Cable wrap</legend>
           <label class="checkline">
             <input type="checkbox" id="cable">
@@ -782,6 +793,7 @@ threshold.addEventListener("input", () => {
 
 const simpleInputs = [
   "media", "qr", "barcode", "rotate", "margin-top", "margin-bottom",
+  "margin-left", "margin-right",
   "cable-factor", "copies", "cut", "cut-every", "dither", "mirror", "hires",
 ];
 for (const id of simpleInputs) {
@@ -807,6 +819,8 @@ function currentJob() {
     rotate: parseInt($("rotate").value, 10) || 0,
     margin_top_mm: num("margin-top"),
     margin_bottom_mm: num("margin-bottom"),
+    margin_left_mm: num("margin-left"),
+    margin_right_mm: num("margin-right"),
     cable: cableBox.checked,
     cable_factor: parseFloat(cableFactor.value) || 2.5,
     copies: parseInt($("copies").value, 10) || 1,

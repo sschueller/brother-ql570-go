@@ -114,8 +114,17 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 
 	topMargin := MMToDots(job.MarginTopMM) * scale
 	bottomMargin := MMToDots(job.MarginBottomMM) * scale
+	leftMargin := MMToDots(job.MarginLeftMM) * scale
+	rightMargin := MMToDots(job.MarginRightMM) * scale
 	sideMargin := 4 * scale
 	gap := 4 * scale
+
+	// Horizontal content area: the printable width minus the left/right
+	// margins. All elements are aligned within this area.
+	contentW := cw - leftMargin - rightMargin
+	if contentW <= 0 {
+		return nil, fmt.Errorf("left + right margins leave no printable width on media %s", media.ID)
+	}
 
 	y := topMargin
 
@@ -142,11 +151,11 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 
 	for _, line := range job.Text {
 		lineW := measureString(face, line)
-		if lineW > float64(cw) {
+		if lineW > float64(contentW) {
 			return nil, fmt.Errorf("text line too wide for media %s: %.0f px > %d px (%.2f mm > %.2f mm); use a smaller --font-size or wider media",
-				media.ID, lineW, cw, lineW*25.4/DPI, float64(cw)*25.4/DPI)
+				media.ID, lineW, contentW, lineW*25.4/DPI, float64(contentW)*25.4/DPI)
 		}
-		x := alignedX(job.Align, int(lineW), cw)
+		x := leftMargin + alignedX(job.Align, int(lineW), contentW)
 		drawText(img, face, x, y+ascent, line)
 		y += lineHeight
 	}
@@ -162,17 +171,17 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 		// Target size: up to the full printable width, capped at 30 mm so
 		// a standalone QR stays scannable without dominating the label.
 		maxQr := MMToDots(30) * scale
-		qrSize := cw - 2*sideMargin
+		qrSize := contentW - 2*sideMargin
 		if qrSize > maxQr {
 			qrSize = maxQr
 		}
 		if qrSize < 21 {
-			return nil, fmt.Errorf("media %s is too narrow (%d px) for a scannable QR code", media.ID, cw)
+			return nil, fmt.Errorf("media %s is too narrow (%d px) for a scannable QR code", media.ID, contentW)
 		}
 		if y+qrSize > ch-bottomMargin {
 			return nil, overflowErr("the QR code", qrSize)
 		}
-		x := alignedX(job.Align, qrSize, cw)
+		x := leftMargin + alignedX(job.Align, qrSize, contentW)
 		drawQR(img, qr.Bitmap(), x, y, qrSize)
 		y += qrSize + gap
 	}
@@ -182,12 +191,12 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 		if err != nil {
 			return nil, fmt.Errorf("encoding Code128 barcode: %w", err)
 		}
-		barW := cw - 2*sideMargin
+		barW := contentW - 2*sideMargin
 		barH := MMToDots(10) * scale
 		if y+barH > ch-bottomMargin {
 			return nil, overflowErr("the barcode", barH)
 		}
-		x := alignedX(job.Align, barW, cw)
+		x := leftMargin + alignedX(job.Align, barW, contentW)
 		scaled, err := barcode.Scale(bc, barW, barH)
 		if err != nil {
 			return nil, fmt.Errorf("scaling barcode: %w", err)
@@ -201,7 +210,7 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 		if err != nil {
 			return nil, err
 		}
-		imgW := cw - 2*sideMargin
+		imgW := contentW - 2*sideMargin
 		b := src.Bounds()
 		imgH := imgW * b.Dy() / b.Dx()
 		if imgH <= 0 {
@@ -210,7 +219,7 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 		if y+imgH > ch-bottomMargin {
 			return nil, overflowErr("the image", imgH)
 		}
-		x := alignedX(job.Align, imgW, cw)
+		x := leftMargin + alignedX(job.Align, imgW, contentW)
 		dst := image.Rect(x, y, x+imgW, y+imgH)
 		draw.BiLinear.Scale(img.gray, dst, src, b, draw.Over, nil)
 		y += imgH + gap

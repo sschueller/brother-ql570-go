@@ -145,6 +145,9 @@ func TestJobValidateOptions(t *testing.T) {
 		{"compress tiff", func(j *Job) { j.Compress = CompressTIFF }},
 		{"threshold 101", func(j *Job) { j.Threshold = 101 }},
 		{"font size negative", func(j *Job) { j.FontSize = -1 }},
+		{"margin left negative", func(j *Job) { j.MarginLeftMM = -1 }},
+		{"margin right negative", func(j *Job) { j.MarginRightMM = -1 }},
+		{"margins exceed width", func(j *Job) { j.MarginLeftMM = 20; j.MarginRightMM = 20 }},
 		{"no content", func(j *Job) { j.Text = nil; j.QR = ""; j.Barcode = ""; j.Image = "" }},
 	}
 	for _, tc := range bad {

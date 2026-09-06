@@ -83,6 +83,12 @@ type Job struct {
 	MarginTopMM    float64 `json:"margin_top_mm,omitempty"`
 	MarginBottomMM float64 `json:"margin_bottom_mm,omitempty"`
 
+	// MarginLeftMM and MarginRightMM add horizontal whitespace inside the
+	// printable width. Content is laid out within the remaining area
+	// (Aligned within it by Align).
+	MarginLeftMM  float64 `json:"margin_left_mm,omitempty"`
+	MarginRightMM float64 `json:"margin_right_mm,omitempty"`
+
 	// Align is the horizontal alignment of text/barcode/QR elements:
 	// left (default), center or right.
 	Align string `json:"align,omitempty"`
@@ -179,6 +185,15 @@ func (j *Job) Validate() (Media, error) {
 	}
 	if j.Threshold < 0 || j.Threshold > 100 {
 		return Media{}, fmt.Errorf("threshold must be 0..100, got %d", j.Threshold)
+	}
+	if j.MarginLeftMM < 0 {
+		return Media{}, fmt.Errorf("margin_left_mm must be >= 0, got %g", j.MarginLeftMM)
+	}
+	if j.MarginRightMM < 0 {
+		return Media{}, fmt.Errorf("margin_right_mm must be >= 0, got %g", j.MarginRightMM)
+	}
+	if MMToDots(j.MarginLeftMM)+MMToDots(j.MarginRightMM) >= media.PrintableWidthDots {
+		return Media{}, fmt.Errorf("left + right margins (%.1f + %.1f mm) leave no printable width on media %q", j.MarginLeftMM, j.MarginRightMM, media.ID)
 	}
 	switch j.Rotate {
 	case 0, 90, 180, 270:

@@ -419,6 +419,80 @@ func TestRenderTextTooWide(t *testing.T) {
 	}
 }
 
+// TestRenderHorizontalMargins verifies that margin_left_mm shifts the ink
+// right and margin_right_mm narrows the printable area.
+func TestRenderHorizontalMargins(t *testing.T) {
+	j := textJob("MARGIN", 40)
+	j.Media = "62mm"
+	j.MarginLeftMM = 10
+	j.MarginRightMM = 10
+	j.DefaultJobValues()
+	media, err := j.Validate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := RenderJob(j, media)
+	if err != nil {
+		t.Fatalf("RenderJob: %v", err)
+	}
+	width := media.PrintableWidthDots
+	minX, maxX := width, -1
+	for y := range rows {
+		for x := 0; x < width; x++ {
+			if bitAt(rows, media, width, x, y) {
+				if x < minX {
+					minX = x
+				}
+				if x > maxX {
+					maxX = x
+				}
+			}
+		}
+	}
+	if maxX < 0 {
+		t.Fatal("no ink rendered")
+	}
+	leftDots, rightDots := MMToDots(10), MMToDots(10)
+	if minX < leftDots {
+		t.Errorf("ink starts at x=%d, want >= left margin %d", minX, leftDots)
+	}
+	if maxX >= width-rightDots {
+		t.Errorf("ink reaches x=%d, want < width - right margin = %d", maxX, width-rightDots)
+	}
+
+	// The same text without margins must start further left.
+	plain := textJob("MARGIN", 40)
+	plain.Media = "62mm"
+	plain.DefaultJobValues()
+	plainRows, err := RenderJob(plain, media)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plainMin := width
+	for y := range plainRows {
+		for x := 0; x < width; x++ {
+			if bitAt(plainRows, media, width, x, y) && x < plainMin {
+				plainMin = x
+			}
+		}
+	}
+	if plainMin >= minX {
+		t.Errorf("left margin should shift ink right: plain min x %d, margined min x %d", plainMin, minX)
+	}
+}
+
+// TestRenderHorizontalMarginTextTooWide verifies that a text line that fits
+// the raw media but not the margined content area is rejected.
+func TestRenderHorizontalMarginTextTooWide(t *testing.T) {
+	j := textJob("MARGIN", 40)
+	j.MarginLeftMM = 24 // leaves ~2 mm of content width on 29 mm media
+	j.DefaultJobValues()
+	media, _ := j.Validate()
+	if _, err := RenderJob(j, media); err == nil {
+		t.Error("expected error for text wider than the margined content area")
+	}
+}
+
 func TestRenderDieCut(t *testing.T) {
 	j := &Job{Media: "62x100", Text: []string{"PATCH PANEL 42"}}
 	j.DefaultJobValues()
