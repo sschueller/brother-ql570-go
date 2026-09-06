@@ -6,16 +6,53 @@
 <title>QL-570 Label Designer</title>
 <style>
 :root {
+  color-scheme: light;
   --bg: #f4f5f7;
   --panel: #ffffff;
   --ink: #1a1d21;
   --muted: #6b7280;
   --line: #e2e5ea;
+  --line-soft: #f0f1f3;
+  --input-bg: #ffffff;
+  --btn-hover: #f6f7f9;
+  --danger-bg: #fdecea;
+  --accent-bg: #f0f6ff;
   --accent: #1f6feb;
+  --accent-hover: #1a5fca;
+  --accent-disabled: #9db9e8;
   --accent-ink: #ffffff;
   --danger: #c5221f;
   --ok: #188038;
+  --preview-bg: #d7dbe0;
+  --label-border: #c3c8cf;
+  --checker: #eee;
+  --toast-bg: #202124;
+  --toast-ink: #ffffff;
   --radius: 10px;
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121417;
+  --panel: #1c1f24;
+  --ink: #e6e8eb;
+  --muted: #9aa1ab;
+  --line: #33383f;
+  --line-soft: #262a31;
+  --input-bg: #23272e;
+  --btn-hover: #262b33;
+  --danger-bg: #36201f;
+  --accent-bg: #182a45;
+  --accent: #4c8dff;
+  --accent-hover: #3b78d8;
+  --accent-disabled: #33507a;
+  --accent-ink: #ffffff;
+  --danger: #f28b82;
+  --ok: #81c995;
+  --preview-bg: #0b0d10;
+  --label-border: #4a5059;
+  --checker: #33373d;
+  --toast-bg: #343a43;
+  --toast-ink: #ffffff;
 }
 * { box-sizing: border-box; }
 body {
@@ -37,6 +74,17 @@ header {
 }
 header h1 { font-size: 16px; margin: 0; font-weight: 600; }
 header .spacer { flex: 1; }
+#theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+}
+#theme-toggle svg { width: 15px; height: 15px; fill: currentColor; stroke: currentColor; }
+#theme-toggle .icon-sun { stroke: none; }
+#theme-toggle .icon-moon { fill: none; stroke-width: 2; }
+[data-theme="dark"] #theme-toggle .icon-moon { display: none; }
+:root:not([data-theme="dark"]) #theme-toggle .icon-sun { display: none; }
 header label { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 6px; }
 header input[type=password] {
   border: 1px solid var(--line);
@@ -86,7 +134,8 @@ input[type=text], input[type=number], input[type=password], select, textarea {
   border-radius: 6px;
   padding: 7px 9px;
   font: inherit;
-  background: #fff;
+  background: var(--input-bg);
+  color: var(--ink);
 }
 input[type=text]:focus, input[type=number]:focus, select:focus, textarea:focus {
   outline: 2px solid var(--accent);
@@ -98,7 +147,7 @@ textarea { resize: vertical; min-height: 40px; }
 .row input { flex: 1; }
 .row .remove {
   border: 1px solid var(--line);
-  background: #fff;
+  background: var(--input-bg);
   border-radius: 6px;
   width: 28px;
   height: 28px;
@@ -107,24 +156,25 @@ textarea { resize: vertical; min-height: 40px; }
   font-size: 15px;
   line-height: 1;
 }
-.row .remove:hover { background: #fdecea; }
+.row .remove:hover { background: var(--danger-bg); }
 button {
   border: 1px solid var(--line);
-  background: #fff;
+  background: var(--input-bg);
+  color: var(--ink);
   border-radius: 6px;
   padding: 7px 12px;
   font: inherit;
   cursor: pointer;
 }
-button:hover { background: #f6f7f9; }
+button:hover { background: var(--btn-hover); }
 button.primary {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-ink);
   font-weight: 600;
 }
-button.primary:hover { background: #1a5fca; }
-button.primary:disabled { background: #9db9e8; border-color: #9db9e8; cursor: not-allowed; }
+button.primary:hover { background: var(--accent-hover); }
+button.primary:disabled { background: var(--accent-disabled); border-color: var(--accent-disabled); cursor: not-allowed; }
 button.small { padding: 4px 10px; font-size: 13px; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
 .seg button {
@@ -132,7 +182,7 @@ button.small { padding: 4px 10px; font-size: 13px; }
   border-right: 1px solid var(--line);
   border-radius: 0;
   padding: 6px 14px;
-  background: #fff;
+  background: var(--input-bg);
 }
 .seg button:last-child { border-right: 0; }
 .seg button.active { background: var(--accent); color: var(--accent-ink); }
@@ -160,7 +210,7 @@ details.advanced[open] summary { margin-bottom: 10px; }
   cursor: pointer;
   transition: border-color .15s, background .15s;
 }
-.dropzone.dragover { border-color: var(--accent); background: #f0f6ff; }
+.dropzone.dragover { border-color: var(--accent); background: var(--accent-bg); }
 .dropzone img {
   display: block;
   max-width: 100%;
@@ -168,7 +218,7 @@ details.advanced[open] summary { margin-bottom: 10px; }
   margin: 8px auto 4px;
   border: 1px solid var(--line);
   border-radius: 4px;
-  background: repeating-conic-gradient(#eee 0 25%, #fff 0 50%) 0 0 / 16px 16px;
+  background: repeating-conic-gradient(var(--checker) 0 25%, var(--input-bg) 0 50%) 0 0 / 16px 16px;
 }
 #status-dot {
   display: inline-block;
@@ -183,19 +233,19 @@ details.advanced[open] summary { margin-bottom: 10px; }
 #status-dot.offline { background: var(--danger); }
 #status-dot.error { background: var(--danger); }
 table.info { width: 100%; border-collapse: collapse; font-size: 13px; }
-table.info td { padding: 3px 0; border-bottom: 1px solid #f0f1f3; }
+table.info td { padding: 3px 0; border-bottom: 1px solid var(--line-soft); }
 table.info td:first-child { color: var(--muted); width: 42%; }
 table.info td:last-child { text-align: right; }
 .status-errors {
   margin-top: 8px;
   padding: 8px 10px;
   border-radius: 6px;
-  background: #fdecea;
+  background: var(--danger-bg);
   color: var(--danger);
   font-size: 13px;
 }
 .preview-wrap {
-  background: #d7dbe0;
+  background: var(--preview-bg);
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 14px;
@@ -206,7 +256,7 @@ table.info td:last-child { text-align: right; }
 }
 .label-frame {
   background: #fff;
-  border: 1px solid #c3c8cf;
+  border: 1px solid var(--label-border);
   box-shadow: 0 2px 6px rgba(0,0,0,.12);
   border-radius: 3px;
   width: 100%;
@@ -237,8 +287,8 @@ table.info td:last-child { text-align: right; }
   left: 50%;
   bottom: 24px;
   transform: translateX(-50%);
-  background: #202124;
-  color: #fff;
+  background: var(--toast-bg);
+  color: var(--toast-ink);
   padding: 10px 18px;
   border-radius: 8px;
   font-size: 14px;
@@ -254,11 +304,25 @@ table.info td:last-child { text-align: right; }
 #toast.err { background: var(--danger); }
 footer { text-align: center; color: var(--muted); font-size: 12px; padding: 0 16px 20px; }
 </style>
+<script>
+(function () {
+  var t = localStorage.getItem("ql570_theme");
+  if (t === "dark" || t === "light") {
+    document.documentElement.dataset.theme = t;
+  } else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+    document.documentElement.dataset.theme = "dark";
+  }
+})();
+</script>
 </head>
 <body>
 <header>
   <h1>QL-570 Label Designer</h1>
   <div class="spacer"></div>
+  <button id="theme-toggle" type="button" title="Toggle dark mode" aria-label="Toggle dark mode">
+    <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><g fill="none" stroke-width="2" stroke-linecap="round"><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.9" y1="4.9" x2="6.3" y2="6.3"/><line x1="17.7" y1="17.7" x2="19.1" y2="19.1"/><line x1="4.9" y1="19.1" x2="6.3" y2="17.7"/><line x1="17.7" y1="6.3" x2="19.1" y2="4.9"/></g></svg>
+    <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+  </button>
   <label>token <input type="password" id="token" placeholder="Bearer token" autocomplete="off"></label>
 </header>
 
@@ -468,6 +532,19 @@ let uploadedImage = null; // { path, name, objectUrl }
 const tokenInput = $("token");
 tokenInput.value = localStorage.getItem("ql570_token") || "";
 tokenInput.addEventListener("input", () => localStorage.setItem("ql570_token", tokenInput.value));
+
+// ---- theme ----------------------------------------------------------------
+const themeMedia = window.matchMedia("(prefers-color-scheme: dark)");
+$("theme-toggle").addEventListener("click", () => {
+  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem("ql570_theme", next);
+});
+themeMedia.addEventListener("change", (e) => {
+  if (!localStorage.getItem("ql570_theme")) {
+    document.documentElement.dataset.theme = e.matches ? "dark" : "light";
+  }
+});
 
 async function apiFetch(path, options = {}) {
   const opts = { ...options };
