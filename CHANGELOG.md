@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/sschueller/brother-ql570-go/compare/v0.2.0...v0.3.0) (2026-09-06)
+
+
+### Features
+
+* **web:** add brace expansion for series labels ([2c71c31](https://github.com/sschueller/brother-ql570-go/commit/2c71c312d710834290ad1d0fc42fa5b72c651a85))
+
 ## [0.2.0](https://github.com/sschueller/brother-ql570-go/compare/v0.1.1...v0.2.0) (2026-09-06)
 
 
