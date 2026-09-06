@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/sschueller/brother-ql570-go/compare/v0.3.0...v0.4.0) (2026-09-06)
+
+
+### Features
+
+* **ql:** add horizontal margin support ([9adfdf7](https://github.com/sschueller/brother-ql570-go/commit/9adfdf7ff2d5fbb49077654a5b3ebcb87726797e))
+
 ## [0.3.0](https://github.com/sschueller/brother-ql570-go/compare/v0.2.0...v0.3.0) (2026-09-06)
 
 
