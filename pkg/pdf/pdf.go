@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"fmt"
 	"image"
+	"image/draw"
 	"image/png"
 	"math"
 	"os"
@@ -194,8 +195,12 @@ func renderPage(inst pdfium.Pdfium, doc references.FPDF_DOCUMENT, page, maxPixel
 		res.Cleanup()
 		return nil, fmt.Errorf("rendering page %d: unexpected image type %T", page+1, res.Result.RenderedImage)
 	}
+	// The WebAssembly engine's bitmap rows carry padding bytes, so the
+	// image's Stride can be larger than its width. Copy row-aware via
+	// draw.Draw: a raw Pix copy would shift every row by the padding and
+	// render the page progressively sheared ("skewed").
 	out := image.NewGray(g.Bounds())
-	copy(out.Pix, g.Pix)
+	draw.Draw(out, out.Bounds(), g, g.Bounds().Min, draw.Src)
 	res.Cleanup()
 	return out, nil
 }
