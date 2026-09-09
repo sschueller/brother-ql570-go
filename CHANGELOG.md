@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/sschueller/brother-ql570-go/compare/v0.4.0...v0.4.1) (2026-09-09)
+
+
+### Performance Improvements
+
+* **ql:** cache fonts and auto-grow canvas ([aa17820](https://github.com/sschueller/brother-ql570-go/commit/aa178209f947e0d0b31dd70623ec219b76fc114c))
+
 ## [0.4.0](https://github.com/sschueller/brother-ql570-go/compare/v0.3.0...v0.4.0) (2026-09-06)
 
 
