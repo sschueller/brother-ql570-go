@@ -79,6 +79,8 @@ print flags:
   --pdf-page N             print only page N (1-based) of --pdf
   --fit                    fit the image/PDF page onto the label (whole
                            picture inside the printable area, aspect kept)
+  --trim-margins           crop the white margins around the image/PDF
+                           page content before scaling
   --font file.ttf          TTF font (default: embedded Go Regular)
   --font-size 10           font size in points
   --length 40              label length in mm (continuous media; default:
@@ -161,7 +163,7 @@ func cmdPrint(args []string) error {
 		fontSize, length, marginTop, marginBottom, cableFactor                    float64
 		marginLeft, marginRight                                                   float64
 		copies, cutEvery, rotate, threshold, feedDots, pdfPage                    int
-		cut, mirror, dither, hires, quality, cable, fit                           bool
+		cut, mirror, dither, hires, quality, cable, fit, trimMargins              bool
 	)
 	fs.Var(&texts, "text", "text line (repeatable)")
 	fs.StringVar(&qr, "qr", "", "QR code content")
@@ -170,6 +172,7 @@ func cmdPrint(args []string) error {
 	fs.StringVar(&pdfFile, "pdf", "", "PDF file to print (one label per page)")
 	fs.IntVar(&pdfPage, "pdf-page", 0, "print only this PDF page (1-based)")
 	fs.BoolVar(&fit, "fit", false, "fit the image/PDF page onto the label instead of full width")
+	fs.BoolVar(&trimMargins, "trim-margins", false, "crop the white margins around the image/PDF content")
 	fs.StringVar(&font, "font", "", "TTF font file")
 	fs.Float64Var(&fontSize, "font-size", 10, "font size in points")
 	fs.Float64Var(&length, "length", 0, "label length in mm (continuous media, default fits content)")
@@ -204,7 +207,7 @@ func cmdPrint(args []string) error {
 	// Content flags that make no sense combined with a multi-label job
 	// file (each label carries its own options in the JSON array).
 	contentFlags := []string{
-		"text", "qr", "barcode", "image", "pdf", "pdf-page", "fit", "font", "font-size", "length",
+		"text", "qr", "barcode", "image", "pdf", "pdf-page", "fit", "trim-margins", "font", "font-size", "length",
 		"media", "copies", "cut", "cut-every", "mirror", "rotate",
 		"margin-top", "margin-bottom", "margin-left", "margin-right", "align", "compress", "dither",
 		"threshold", "hires", "feed-dots", "quality", "cable", "cable-factor",
@@ -258,6 +261,9 @@ func cmdPrint(args []string) error {
 			} else {
 				job.ImageFit = ql.ImageFitWidth
 			}
+		}
+		if set["trim-margins"] {
+			job.ImageTrim = trimMargins
 		}
 		if set["font"] {
 			job.Font = font

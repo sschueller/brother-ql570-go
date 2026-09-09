@@ -58,6 +58,12 @@ type Job struct {
 	// page rendered onto a die-cut label).
 	ImageFit string `json:"image_fit,omitempty"`
 
+	// ImageTrim crops the white border around the image's content before
+	// scaling. Useful for PDF pages (or scans) whose design is smaller
+	// than the page: the trimmed content then fills the label instead of
+	// keeping the page's white margins.
+	ImageTrim bool `json:"image_trim,omitempty"`
+
 	// Font is the path to a TTF file. Empty uses the embedded Go Regular
 	// font.
 	Font string `json:"font,omitempty"`

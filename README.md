@@ -60,6 +60,7 @@ ql570 version
 | `--pdf file.pdf` | - | print a PDF (rasterized at 300 dpi; one label per page, up to 30 pages) |
 | `--pdf-page N` | - | with `--pdf`, print only page N (1-based) |
 | `--fit` | false | fit the image/PDF page onto the label: the whole picture inside the printable area with the aspect ratio kept (otherwise images are scaled to full width) |
+| `--trim-margins` | false | crop the white margins around the image/PDF page content before scaling |
 | `--font file.ttf` | embedded Go Regular | TTF font file |
 | `--font-size` | 10 | font size in points |
 | `--length` | auto-fit | label length in mm (continuous tape only; default fits the content, 12.7..1000 mm) |
@@ -209,7 +210,9 @@ a few megabytes larger.
   rendered at 300 dpi to a PNG; the page navigator picks the page to print
   and "scale to fit label" fits the whole page inside the printable area of
   the label (aspect ratio kept) — otherwise the page is scaled to the full
-  printable width, like an image.
+  printable width, like an image. "trim white margins" crops the page's
+  white border first, so the content (not the page) fills the label — handy
+  for PDFs whose design is smaller than the page size.
 - `POST /v1/upload` accepts PDFs: the response carries one PNG `path` per
   page; any page path can be used as the job's `image` field together with
   `"image_fit": "label"` or `"image_fit": "width"`.
@@ -221,7 +224,9 @@ a few megabytes larger.
   scaled down to that bound — far beyond what a 62 mm label can resolve.
 - The `image_fit` field of `ql.Job` (`"width"`, default, or `"label"`) also
   applies to uploaded images: `"label"` fits the whole picture within a
-  fixed-length label (die-cut media or an explicit `length_mm`).
+  fixed-length label (die-cut media or an explicit `length_mm`). The
+  `image_trim` field (`--trim-margins`) crops the white border around the
+  image or PDF page content before scaling.
 
 ## Docker
 

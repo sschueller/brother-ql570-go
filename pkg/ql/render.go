@@ -273,6 +273,10 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 		if b.Dx() <= 0 || b.Dy() <= 0 {
 			return nil, fmt.Errorf("image %s has invalid size %dx%d", job.Image, b.Dx(), b.Dy())
 		}
+		if job.ImageTrim {
+			src = trimWhiteMargins(src)
+			b = src.Bounds()
+		}
 		imgW := contentW - 2*sideMargin
 		imgH := imgW * b.Dy() / b.Dx()
 		if job.Rotate == 90 || job.Rotate == 270 {
@@ -603,4 +607,46 @@ func decodeImageFile(path string) (image.Image, error) {
 		return nil, fmt.Errorf("decoding image %s (PNG/JPEG/GIF supported): %w", path, err)
 	}
 	return img, nil
+}
+
+// trimThreshold is the grayscale value below which a pixel counts as
+// content when trimming white margins; 250 tolerates slight compression
+// noise while still trimming clean white page borders.
+const trimThreshold = 250
+
+// trimWhiteMargins crops the white border around the image's content:
+// every outermost row/column consisting only of near-white pixels is
+// removed. The result is a grayscale image with the content's exact
+// bounds. A fully white image is returned unchanged.
+func trimWhiteMargins(src image.Image) image.Image {
+	b := src.Bounds()
+	if b.Dx() < 2 || b.Dy() < 2 {
+		return src
+	}
+	minX, maxX, minY, maxY := b.Max.X, b.Min.X, b.Max.Y, b.Min.Y
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			r, g, bl, _ := src.At(x, y).RGBA()
+			if r>>8 < trimThreshold || g>>8 < trimThreshold || bl>>8 < trimThreshold {
+				if x < minX {
+					minX = x
+				}
+				if x > maxX {
+					maxX = x
+				}
+				if y < minY {
+					minY = y
+				}
+				if y > maxY {
+					maxY = y
+				}
+			}
+		}
+	}
+	if maxX < minX {
+		return src
+	}
+	cropped := image.NewGray(image.Rect(0, 0, maxX-minX+1, maxY-minY+1))
+	draw.Draw(cropped, cropped.Bounds(), src, image.Point{minX, minY}, draw.Src)
+	return cropped
 }

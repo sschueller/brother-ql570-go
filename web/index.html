@@ -380,6 +380,11 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 0 16
           scale to fit label
           <span class="hint">whole page within the printable area (otherwise full width)</span>
         </label>
+        <label class="checkline">
+          <input type="checkbox" id="trim-margins">
+          trim white margins
+          <span class="hint">crop the white border around the image/PDF page content</span>
+        </label>
       </fieldset>
 
       <fieldset>
@@ -852,7 +857,7 @@ threshold.addEventListener("input", () => {
 
 const simpleInputs = [
   "media", "qr", "barcode", "rotate", "margin-top", "margin-bottom",
-  "margin-left", "margin-right", "fit",
+  "margin-left", "margin-right", "fit", "trim-margins",
   "cable-factor", "copies", "cut", "cut-every", "dither", "mirror", "hires",
 ];
 for (const id of simpleInputs) {
@@ -874,6 +879,7 @@ function currentJob() {
     barcode: $("barcode").value.trim(),
     image: uploadedImage && uploadedImage.path ? uploadedImage.path : "",
     image_fit: $("fit").checked ? "label" : "width",
+    image_trim: $("trim-margins").checked,
     font_size: parseFloat(fontSize.value) || 10,
     align: align,
     rotate: parseInt($("rotate").value, 10) || 0,

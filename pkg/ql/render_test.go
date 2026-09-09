@@ -266,6 +266,108 @@ func TestRenderRotate90RejectedWhenTooTall(t *testing.T) {
 	}
 }
 
+// TestTrimWhiteMarginsBounds verifies that the white border is cropped to
+// the content's exact bounds.
+func TestTrimWhiteMarginsBounds(t *testing.T) {
+	img := image.NewGray(image.Rect(0, 0, 100, 60))
+	for i := range img.Pix {
+		img.Pix[i] = 0xFF
+	}
+	for y := 10; y < 50; y++ {
+		for x := 20; x < 80; x++ {
+			img.SetGray(x, y, color.Gray{Y: 0})
+		}
+	}
+	out := trimWhiteMargins(img)
+	want := image.Rect(0, 0, 60, 40)
+	if out.Bounds() != want {
+		t.Errorf("trimmed bounds %v, want %v", out.Bounds(), want)
+	}
+	if out.At(0, 0).(color.Gray).Y != 0 {
+		t.Error("trimmed image should preserve the content")
+	}
+}
+
+// TestTrimWhiteMarginsAllWhite verifies that a fully white image is
+// returned unchanged.
+func TestTrimWhiteMarginsAllWhite(t *testing.T) {
+	img := image.NewGray(image.Rect(0, 0, 50, 20))
+	for i := range img.Pix {
+		img.Pix[i] = 0xFF
+	}
+	if out := trimWhiteMargins(img); out.Bounds() != img.Bounds() {
+		t.Errorf("fully white image changed bounds: %v", out.Bounds())
+	}
+}
+
+// TestImageTrimMargins verifies that image_trim crops the white page
+// margins, so the content (not the page) fills the printable width.
+func TestImageTrimMargins(t *testing.T) {
+	img := image.NewGray(image.Rect(0, 0, 100, 60))
+	for i := range img.Pix {
+		img.Pix[i] = 0xFF
+	}
+	for y := 10; y < 50; y++ {
+		for x := 20; x < 80; x++ {
+			img.SetGray(x, y, color.Gray{Y: 0})
+		}
+	}
+	path := filepath.Join(t.TempDir(), "margins.png")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := png.Encode(f, img); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+
+	inkSpan := func(out *image.Gray) int {
+		minX, maxX := 1<<30, -1
+		for y := 0; y < out.Bounds().Dy(); y++ {
+			for x := 0; x < out.Bounds().Dx(); x++ {
+				if out.GrayAt(x, y).Y < 128 {
+					if x < minX {
+						minX = x
+					}
+					if x > maxX {
+						maxX = x
+					}
+				}
+			}
+		}
+		if maxX < 0 {
+			return 0
+		}
+		return maxX - minX + 1
+	}
+
+	j := &Job{Media: "29", Image: path}
+	j.DefaultJobValues()
+	media, err := j.Validate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, err := RenderJobImage(j, media)
+	if err != nil {
+		t.Fatal(err)
+	}
+	j.ImageTrim = true
+	trimmed, err := RenderJobImage(j, media)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plainSpan, trimSpan := inkSpan(plain), inkSpan(trimmed)
+	// The content occupies 60% of the image width: untrimmed it spans
+	// ~60% of the label, trimmed it fills the printable width (298 px).
+	if trimSpan <= plainSpan+50 {
+		t.Errorf("image_trim should widen the ink: plain %d, trimmed %d", plainSpan, trimSpan)
+	}
+	if trimSpan < 290 {
+		t.Errorf("trimmed image should fill the printable width: %d px", trimSpan)
+	}
+}
+
 func TestRenderQRAndBarcode(t *testing.T) {
 	j := &Job{
 		Text:     []string{"rack-7"},
