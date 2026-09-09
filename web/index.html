@@ -157,6 +157,8 @@ textarea { resize: vertical; min-height: 40px; }
   line-height: 1;
 }
 .row .remove:hover { background: var(--danger-bg); }
+.pdfnav { margin-top: 8px; }
+.pdfnav span { flex: 1; text-align: center; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
 button {
   border: 1px solid var(--line);
   background: var(--input-bg);
@@ -362,12 +364,22 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 0 16
       </div>
 
       <fieldset>
-        <legend>Image</legend>
+        <legend>Image / PDF</legend>
         <div class="dropzone" id="dropzone">
-          <span id="dz-hint">Drop an image here or click to upload</span>
+          <span id="dz-hint">Drop an image or PDF here, or click to upload</span>
           <img id="thumb" alt="" hidden>
           <div id="dz-name" hidden></div>
         </div>
+        <div class="row pdfnav" id="pdf-nav" hidden>
+          <button class="small" id="pdf-prev" type="button">‹ prev</button>
+          <span id="pdf-page-ind">page 1 of 1</span>
+          <button class="small" id="pdf-next" type="button">next ›</button>
+        </div>
+        <label class="checkline">
+          <input type="checkbox" id="fit">
+          scale to fit label
+          <span class="hint">whole page within the printable area (otherwise full width)</span>
+        </label>
       </fieldset>
 
       <fieldset>
@@ -545,7 +557,7 @@ const MEDIA = [
 const $ = (id) => document.getElementById(id);
 
 let previewSeq = 0;
-let uploadedImage = null; // { path, name, objectUrl }
+let uploadedImage = null; // { path, name, objectUrl?, pages?, page? }
 
 // ---- token ---------------------------------------------------------------
 const tokenInput = $("token");
@@ -691,20 +703,42 @@ $("add-line").addEventListener("click", () => addTextLine());
 
 // ---- image upload --------------------------------------------------------
 const dropzone = $("dropzone");
+
+function isPDFName(name) {
+  return /\.pdf$/i.test(name);
+}
+
+function updatePDFNav() {
+  const nav = $("pdf-nav");
+  if (uploadedImage && uploadedImage.pages && uploadedImage.pages.length > 1) {
+    nav.hidden = false;
+    $("pdf-page-ind").textContent = "page " + (uploadedImage.page + 1) + " of " + uploadedImage.pages.length;
+  } else {
+    nav.hidden = true;
+  }
+}
+
 function setUploadedImage(file) {
+  const pdfUpload = isPDFName(file.name);
   if (uploadedImage && uploadedImage.objectUrl) URL.revokeObjectURL(uploadedImage.objectUrl);
   uploadedImage = {
     path: null,
     name: file.name,
-    objectUrl: URL.createObjectURL(file),
+    objectUrl: pdfUpload ? null : URL.createObjectURL(file),
   };
   const thumb = $("thumb");
-  thumb.src = uploadedImage.objectUrl;
-  thumb.hidden = false;
   const name = $("dz-name");
+  if (pdfUpload) {
+    thumb.hidden = true;
+    thumb.src = "";
+  } else {
+    thumb.src = uploadedImage.objectUrl;
+    thumb.hidden = false;
+  }
   name.hidden = false;
   name.textContent = file.name + " — uploading…";
   $("dz-hint").hidden = true;
+  updatePDFNav();
   schedulePreview();
 }
 
@@ -715,8 +749,18 @@ async function uploadImage(file) {
     const res = await apiFetch("/v1/upload", { method: "POST", body: fd });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "upload failed");
-    uploadedImage.path = data.path;
-    $("dz-name").textContent = file.name + " — uploaded (double-click to remove)";
+    if (data.type === "pdf") {
+      uploadedImage.pages = data.paths;
+      uploadedImage.page = 0;
+      uploadedImage.path = data.paths[0];
+      $("dz-name").textContent = file.name + " — " + data.pages + " page" +
+        (data.pages === 1 ? "" : "s") + " (double-click to remove)";
+      $("fit").checked = true;
+    } else {
+      uploadedImage.path = data.path;
+      $("dz-name").textContent = file.name + " — uploaded (double-click to remove)";
+    }
+    updatePDFNav();
     schedulePreview();
   } catch (e) {
     $("dz-name").textContent = "upload failed: " + e.message;
@@ -727,7 +771,7 @@ async function uploadImage(file) {
 dropzone.addEventListener("click", () => {
   const input = document.createElement("input");
   input.type = "file";
-  input.accept = "image/png,image/jpeg,image/gif";
+  input.accept = "image/png,image/jpeg,image/gif,application/pdf,.pdf";
   input.addEventListener("change", () => {
     const f = input.files && input.files[0];
     if (f) {
@@ -756,8 +800,22 @@ dropzone.addEventListener("dblclick", (e) => {
   $("thumb").src = "";
   $("dz-name").hidden = true;
   $("dz-hint").hidden = false;
+  updatePDFNav();
   schedulePreview();
 });
+
+const pdfPrev = $("pdf-prev");
+const pdfNext = $("pdf-next");
+function switchPDFPage(delta) {
+  if (!uploadedImage || !uploadedImage.pages) return;
+  const n = uploadedImage.pages.length;
+  uploadedImage.page = (uploadedImage.page + delta + n) % n;
+  uploadedImage.path = uploadedImage.pages[uploadedImage.page];
+  updatePDFNav();
+  schedulePreview();
+}
+pdfPrev.addEventListener("click", () => switchPDFPage(-1));
+pdfNext.addEventListener("click", () => switchPDFPage(1));
 
 // ---- controls ------------------------------------------------------------
 const fontSize = $("font-size");
@@ -793,7 +851,7 @@ threshold.addEventListener("input", () => {
 
 const simpleInputs = [
   "media", "qr", "barcode", "rotate", "margin-top", "margin-bottom",
-  "margin-left", "margin-right",
+  "margin-left", "margin-right", "fit",
   "cable-factor", "copies", "cut", "cut-every", "dither", "mirror", "hires",
 ];
 for (const id of simpleInputs) {
@@ -814,6 +872,7 @@ function currentJob() {
     qr: $("qr").value.trim(),
     barcode: $("barcode").value.trim(),
     image: uploadedImage && uploadedImage.path ? uploadedImage.path : "",
+    image_fit: $("fit").checked ? "label" : "width",
     font_size: parseFloat(fontSize.value) || 10,
     align: align,
     rotate: parseInt($("rotate").value, 10) || 0,

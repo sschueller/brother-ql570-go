@@ -248,10 +248,27 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 		if err != nil {
 			return nil, err
 		}
-		imgW := contentW - 2*sideMargin
 		b := src.Bounds()
+		if b.Dx() <= 0 || b.Dy() <= 0 {
+			return nil, fmt.Errorf("image %s has invalid size %dx%d", job.Image, b.Dx(), b.Dy())
+		}
+		imgW := contentW - 2*sideMargin
 		imgH := imgW * b.Dy() / b.Dx()
-		if imgH <= 0 {
+		if job.ImageFit == ImageFitLabel {
+			// Fit the whole image inside the printable area (width and
+			// length), preserving the aspect ratio. With an auto-fit
+			// length the label grows with the content, so the width is
+			// the binding constraint, as in the default width fit.
+			boxW := contentW - 2*sideMargin
+			boxH := ch - topMargin - bottomMargin
+			s := math.Min(float64(boxW)/float64(b.Dx()), float64(boxH)/float64(b.Dy()))
+			imgW = int(math.Round(float64(b.Dx()) * s))
+			imgH = int(math.Round(float64(b.Dy()) * s))
+		}
+		if imgW < 1 {
+			imgW = 1
+		}
+		if imgH < 1 {
 			imgH = 1
 		}
 		if y+imgH > ch-bottomMargin {

@@ -7,10 +7,10 @@ no cgo — the label is rendered host-side and the raw command stream is sent
 straight to the device.
 
 Also ships an HTTP print daemon with an **embedded web UI** (label designer
-with live preview, image upload, printer status and print), so any client —
-including the cross-compiled macOS ARM binary — can print labels over the
-network. A Docker image and compose file are included for Raspberry Pi
-(ARM64) deployment.
+with live preview, image and PDF upload, printer status and print), so any
+client — including the cross-compiled macOS ARM binary — can print labels
+over the network. A Docker image and compose file are included for
+Raspberry Pi (ARM64) deployment.
 
 - [Quick start](#quick-start)
 - [CLI](#cli)
@@ -57,6 +57,9 @@ ql570 version
 | `--qr "content"` | - | render a QR code (up to 30 mm, auto version) |
 | `--barcode "content"` | - | render a Code128 barcode |
 | `--image file.png` | - | print a PNG/JPEG/GIF (scaled to full width) |
+| `--pdf file.pdf` | - | print a PDF (rasterized at 300 dpi; one label per page, up to 30 pages) |
+| `--pdf-page N` | - | with `--pdf`, print only page N (1-based) |
+| `--fit` | false | fit the image/PDF page onto the label: the whole picture inside the printable area with the aspect ratio kept (otherwise images are scaled to full width) |
 | `--font file.ttf` | embedded Go Regular | TTF font file |
 | `--font-size` | 10 | font size in points |
 | `--length` | auto-fit | label length in mm (continuous tape only; default fits the content, 12.7..1000 mm) |
@@ -103,6 +106,12 @@ ql570 print --barcode "ABC-123456" --cut=false --length 30
 # Pre-rendered PNG (e.g. a patch panel layout), centered
 ql570 print --image panel.png --align center --length 100
 
+# PDF on a die-cut label: the whole page is scaled to fit the label
+ql570 print --pdf equipment.pdf --media 62x100 --fit
+
+# Only page 3 of a PDF, printed on 29 mm continuous tape
+ql570 print --pdf manual.pdf --pdf-page 3
+
 # JSON job file (same schema as the HTTP API)
 ql570 print --job examples/job.json
 
@@ -127,7 +136,7 @@ QL-570 raster protocol does not expose the firmware version or serial number
 The daemon is the integration point for remote clients and macOS: only the
 daemon touches USB, clients stay platform-independent. It serves an
 embedded single-page **web UI** (label designer with live preview, image
-upload, printer status and print) at `/`, plus the JSON API below.
+and PDF upload, printer status and print) at `/`, plus the JSON API below.
 
 ```sh
 ql570 serve --listen 0.0.0.0:9101 [--token SECRET] [--device /dev/usb/lp0]
@@ -153,7 +162,7 @@ default comes from `$QL570_TOKEN`.
 | `/` | GET | - | embedded web UI (label designer) |
 | `/v1/print` | POST | `ql.Job` JSON (object or **array**) | print synchronously, returns statuses |
 | `/v1/preview` | POST | `ql.Job` JSON (single object) | PNG preview of the rendered label (no printer needed) |
-| `/v1/upload` | POST | multipart `file` (PNG/JPEG/GIF) | stores the image, returns `{"path": "..."}` for the job's `image` field |
+| `/v1/upload` | POST | multipart `file` (PNG/JPEG/GIF **or PDF**) | stores the image and returns `{"path": "..."}`; PDFs are rasterized page by page (max 30) and return `{"type": "pdf", "pages": N, "paths": [...]}` — one PNG path per page, usable as the job's `image` field |
 | `/v1/status` | GET | - | current printer status |
 | `/v1/info` | GET | - | model + media info |
 | `/healthz` | GET | - | liveness probe (no auth) |
@@ -186,6 +195,33 @@ barcode content, so one design can print a numbered series:
   fields without a range stay constant, and every label keeps the UI Copies
   value (copies 2 = two of each). Maximum 1000 labels per series.
 - The preview shows the first label, with "label 1 of N" in the meta line.
+
+### PDF labels
+
+PDFs are supported end to end — web UI, HTTP API and CLI — and are
+rasterized **host-side in pure Go** (no cgo, no poppler/mupdf): the PDFium
+engine compiled to WebAssembly and executed by the [wazero](https://wazero.io)
+runtime (see [pkg/pdf](pkg/pdf)). The WebAssembly module is embedded in the
+binary, so no system libraries are needed; it is why the `ql570` binary is
+a few megabytes larger.
+
+- In the web UI, drop a PDF into the upload field. Every page (max 30) is
+  rendered at 300 dpi to a PNG; the page navigator picks the page to print
+  and "scale to fit label" fits the whole page inside the printable area of
+  the label (aspect ratio kept) — otherwise the page is scaled to the full
+  printable width, like an image.
+- `POST /v1/upload` accepts PDFs: the response carries one PNG `path` per
+  page; any page path can be used as the job's `image` field together with
+  `"image_fit": "label"` or `"image_fit": "width"`.
+- On the CLI, `--pdf file.pdf` prints one label per page,
+  `--pdf-page N` prints a single page and `--fit` scales the page onto the
+  label (`--image` also accepts `--fit`). The temporary page PNGs are
+  deleted after printing.
+- Pages larger than 4096 px at 300 dpi (poster size and up) are rendered
+  scaled down to that bound — far beyond what a 62 mm label can resolve.
+- The `image_fit` field of `ql.Job` (`"width"`, default, or `"label"`) also
+  applies to uploaded images: `"label"` fits the whole picture within a
+  fixed-length label (die-cut media or an explicit `length_mm`).
 
 ## Docker
 
@@ -423,8 +459,10 @@ make build-android-arm64 # cross-compile for Android/Termux (no cgo)
 make docker-build        # daemon Docker image (web UI embedded)
 ```
 
-All dependencies are pure Go: `golang.org/x/image` (fonts/raster),
-`github.com/skip2/go-qrcode`, `github.com/boombuler/barcode`.
+All dependencies are pure Go (no cgo): `golang.org/x/image` (fonts/raster),
+`github.com/skip2/go-qrcode`, `github.com/boombuler/barcode`,
+`github.com/klippa-app/go-pdfium` + `github.com/tetratelabs/wazero` (PDF
+rasterization via embedded WebAssembly).
 
 ## Contributing
 

@@ -21,6 +21,18 @@ const (
 	CompressTIFF = "tiff"
 )
 
+// Image fit modes for the Image element.
+const (
+	// ImageFitWidth scales the image to the full printable width (the
+	// default). Tall images can overflow a fixed-length label.
+	ImageFitWidth = "width"
+	// ImageFitLabel scales the image so the whole picture fits within the
+	// printable area of the label, preserving the aspect ratio. The label
+	// length must be fixed (die-cut media or an explicit length); on
+	// auto-length continuous tape it behaves like ImageFitWidth.
+	ImageFitLabel = "label"
+)
+
 // Job is a fully JSON-serializable print job definition. It is the single
 // schema shared by the Go library, the CLI (--job file.json) and the HTTP
 // daemon (POST /v1/print).
@@ -39,6 +51,12 @@ type Job struct {
 
 	// Image is the path to a PNG/JPEG image file to print.
 	Image string `json:"image,omitempty"`
+
+	// ImageFit controls how the Image is scaled onto the label: "width"
+	// (default) scales it to the full printable width, "label" scales it
+	// so the whole picture fits within the printable area (e.g. a PDF
+	// page rendered onto a die-cut label).
+	ImageFit string `json:"image_fit,omitempty"`
 
 	// Font is the path to a TTF file. Empty uses the embedded Go Regular
 	// font.
@@ -154,6 +172,9 @@ func (j *Job) DefaultJobValues() {
 	if j.Compress == "" {
 		j.Compress = CompressNone
 	}
+	if j.ImageFit == "" {
+		j.ImageFit = ImageFitWidth
+	}
 }
 
 // AutoCut reports whether the automatic cutter is enabled.
@@ -204,6 +225,11 @@ func (j *Job) Validate() (Media, error) {
 	case AlignLeft, AlignCenter, AlignRight:
 	default:
 		return Media{}, fmt.Errorf("align must be left, center or right, got %q", j.Align)
+	}
+	switch j.ImageFit {
+	case "", ImageFitWidth, ImageFitLabel:
+	default:
+		return Media{}, fmt.Errorf("image_fit must be width or label, got %q", j.ImageFit)
 	}
 	switch j.Compress {
 	case CompressNone:

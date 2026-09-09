@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/png"
 	"io"
@@ -238,6 +239,100 @@ func TestUploadRejectsNonImage(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("garbage upload: HTTP %d, want 400", rec.Code)
+	}
+}
+
+// minimalPDF builds a small one-page PDF (a filled black rectangle) with
+// a valid xref table, for the PDF upload tests.
+func minimalPDF() []byte {
+	stream := "0 0 0 rg\n20 20 160 60 re f"
+	objs := []string{
+		"<< /Type /Catalog /Pages 2 0 R >>",
+		"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] /Resources << >> /Contents 4 0 R >>",
+		fmt.Sprintf("<< /Length %d >>\nstream\n%s\nendstream", len(stream), stream),
+	}
+	var b bytes.Buffer
+	b.WriteString("%PDF-1.4\n")
+	offsets := make([]int, len(objs))
+	for i, o := range objs {
+		offsets[i] = b.Len()
+		fmt.Fprintf(&b, "%d 0 obj\n%s\nendobj\n", i+1, o)
+	}
+	xref := b.Len()
+	fmt.Fprintf(&b, "xref\n0 %d\n", len(objs)+1)
+	b.WriteString("0000000000 65535 f \n")
+	for _, off := range offsets {
+		fmt.Fprintf(&b, "%010d 00000 n \n", off)
+	}
+	fmt.Fprintf(&b, "trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n", len(objs)+1, xref)
+	return b.Bytes()
+}
+
+func uploadFile(t *testing.T, h http.Handler, name string, data []byte) *httptest.ResponseRecorder {
+	t.Helper()
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	fw, err := mw.CreateFormFile("file", name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fw.Write(data); err != nil {
+		t.Fatal(err)
+	}
+	if err := mw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("POST", "/v1/upload", &buf)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestUploadPDF(t *testing.T) {
+	h := newTestMux("")
+	rec := uploadFile(t, h, "label.pdf", minimalPDF())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PDF upload: HTTP %d: %s", rec.Code, rec.Body.String())
+	}
+	var up struct {
+		Type  string   `json:"type"`
+		Pages int      `json:"pages"`
+		Paths []string `json:"paths"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &up); err != nil {
+		t.Fatal(err)
+	}
+	if up.Type != "pdf" || up.Pages != 1 || len(up.Paths) != 1 {
+		t.Fatalf("unexpected PDF upload response: %+v", up)
+	}
+	if up.Paths[0] == "" || !strings.HasPrefix(up.Paths[0], os.TempDir()) {
+		t.Fatalf("unexpected page path %q", up.Paths[0])
+	}
+	defer os.Remove(up.Paths[0])
+
+	// The returned page path must work as the job image, including the
+	// image_fit=label mode that scales the whole page onto the label.
+	rec = doJSON(t, h, "POST", "/v1/preview", "", map[string]any{
+		"image":     up.Paths[0],
+		"image_fit": "label",
+		"media":     "29",
+		"length_mm": 40,
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("preview with PDF page: HTTP %d: %s", rec.Code, rec.Body.String())
+	}
+	if _, err := png.Decode(bytes.NewReader(rec.Body.Bytes())); err != nil {
+		t.Fatalf("preview with PDF page not a PNG: %v", err)
+	}
+}
+
+func TestUploadRejectsBadPDF(t *testing.T) {
+	h := newTestMux("")
+	rec := uploadFile(t, h, "junk.pdf", []byte("%PDF-1.4\nthis is not a real pdf"))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("garbage PDF upload: HTTP %d, want 400", rec.Code)
 	}
 }
 

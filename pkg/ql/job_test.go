@@ -142,6 +142,7 @@ func TestJobValidateOptions(t *testing.T) {
 		{"cut every 0", func(j *Job) { j.CutEvery = 0 }},
 		{"rotate 45", func(j *Job) { j.Rotate = 45 }},
 		{"align bogus", func(j *Job) { j.Align = "middle" }},
+		{"image fit bogus", func(j *Job) { j.ImageFit = "full" }},
 		{"compress tiff", func(j *Job) { j.Compress = CompressTIFF }},
 		{"threshold 101", func(j *Job) { j.Threshold = 101 }},
 		{"font size negative", func(j *Job) { j.FontSize = -1 }},
