@@ -53,6 +53,27 @@ func (c *canvas) ensureH(minH int) {
 	c.h = newH
 }
 
+// ensureW grows the canvas to at least minW columns, filling the new
+// columns white and preserving the existing pixels. Used for rotated
+// images, which can be laid out wider than the printable width. The width
+// grows exactly: padding columns would become leading blank rows after a
+// 270-degree rotation.
+func (c *canvas) ensureW(minW int) {
+	if minW <= c.w {
+		return
+	}
+	newW := minW
+	ng := image.NewGray(image.Rect(0, 0, newW, c.h))
+	for y := 0; y < c.h; y++ {
+		copy(ng.Pix[y*newW:y*newW+c.w], c.gray.Pix[y*c.w:y*c.w+c.w])
+		for x := c.w; x < newW; x++ {
+			ng.Pix[y*newW+x] = 0xFF
+		}
+	}
+	c.gray = ng
+	c.w = newW
+}
+
 func (c *canvas) at(x, y int) uint8 {
 	if x < 0 || x >= c.w || y < 0 || y >= c.h {
 		return 255
@@ -254,7 +275,24 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 		}
 		imgW := contentW - 2*sideMargin
 		imgH := imgW * b.Dy() / b.Dx()
-		if job.ImageFit == ImageFitLabel {
+		if job.Rotate == 90 || job.Rotate == 270 {
+			// Lay the image out for its rotated orientation: after the
+			// rotation the image's height becomes its width, so "fill the
+			// printable width" means the pre-rotation height equals the
+			// printable width minus the side margins. The pre-rotation
+			// width follows the aspect ratio and may exceed the printable
+			// width (the canvas is widened accordingly).
+			boxW := contentW - 2*sideMargin
+			boxH := ch - topMargin - bottomMargin
+			s := float64(boxW) / float64(b.Dy())
+			if job.ImageFit == ImageFitLabel {
+				// With a fixed label length also keep the rotated height
+				// (the pre-rotation width) inside the label.
+				s = math.Min(s, float64(boxH)/float64(b.Dx()))
+			}
+			imgH = int(math.Round(float64(b.Dy()) * s))
+			imgW = int(math.Round(float64(b.Dx()) * s))
+		} else if job.ImageFit == ImageFitLabel {
 			// Fit the whole image inside the printable area (width and
 			// length), preserving the aspect ratio. With an auto-fit
 			// length the label grows with the content, so the width is
@@ -276,6 +314,14 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 		}
 		img.ensureH(y + imgH)
 		x := leftMargin + alignedX(job.Align, imgW, contentW)
+		if job.Rotate == 90 || job.Rotate == 270 {
+			// The rotated content is centered on the final label, so the
+			// pre-rotation position only determines the canvas extent.
+			x = leftMargin
+		}
+		if x+imgW > img.w {
+			img.ensureW(x + imgW)
+		}
 		dst := image.Rect(x, y, x+imgW, y+imgH)
 		draw.BiLinear.Scale(img.gray, dst, src, b, draw.Over, nil)
 		y += imgH + gap
@@ -305,7 +351,10 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 		if contentH > cw {
 			return nil, fmt.Errorf("cannot rotate 90/270 degrees: content is %d px tall but the printable width is only %d px", contentH, cw)
 		}
-		rW, rH := contentH, cw
+		// The canvas may be wider than the printable width when a rotated
+		// image fills the label (its pre-rotation width becomes the label
+		// length), so rotate the full canvas.
+		rW, rH := contentH, img.w
 		rot = newCanvas(rW, rH)
 		for yy := 0; yy < rH; yy++ {
 			for xx := 0; xx < rW; xx++ {
@@ -348,6 +397,10 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 	}
 	out := newCanvas(finalW, finalH)
 	if rot.w > finalW || rot.h > finalH {
+		if job.Rotate == 90 || job.Rotate == 270 {
+			return nil, fmt.Errorf("rotated content needs %.1f mm but the label is only %.1f mm long (increase --length)",
+				DotsToMM(rot.h/scale), DotsToMM(finalH/scale))
+		}
 		return nil, fmt.Errorf("internal error: rotated content %dx%d does not fit %dx%d", rot.w, rot.h, finalW, finalH)
 	}
 	x0 := (finalW - rot.w) / 2

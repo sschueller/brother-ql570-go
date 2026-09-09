@@ -70,7 +70,7 @@ ql570 version
 | `--cut` | true | automatic cutter (`--cut=false` to disable) |
 | `--cut-every` | 1 | cut after every n-th label |
 | `--mirror` | false | mirror the label horizontally |
-| `--rotate` | 0 | rotate content 90/180/270 degrees |
+| `--rotate` | 0 | rotate content 90/180/270 degrees; images are scaled to fill the label width in the rotated orientation |
 | `--margin-top` / `--margin-bottom` | 0 | content margins in mm |
 | `--margin-left` / `--margin-right` | 0 | horizontal offset/margin inside the printable width, in mm |
 | `--align` | left | `left` \| `center` \| `right` |

@@ -7,6 +7,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -165,6 +166,91 @@ func TestRenderRotate180(t *testing.T) {
 	media, _ := j.Validate()
 	if _, err := RenderJob(j, media); err != nil {
 		t.Fatalf("RenderJob rotate 180: %v", err)
+	}
+}
+
+// TestRenderRotate90ImageFillsWidth verifies that an image rotated 90
+// degrees is scaled so the rotated image fills the printable width (its
+// pre-rotation height equals the printable width), instead of the old 1:1
+// rotation that left the label mostly empty.
+func TestRenderRotate90ImageFillsWidth(t *testing.T) {
+	// 100x50 px image with a full-height black column (x 10..19): rotated
+	// 90 degrees this becomes a band spanning the full label width.
+	img := image.NewGray(image.Rect(0, 0, 100, 50))
+	for i := range img.Pix {
+		img.Pix[i] = 0xFF
+	}
+	for y := 0; y < 50; y++ {
+		for x := 10; x < 20; x++ {
+			img.SetGray(x, y, color.Gray{Y: 0})
+		}
+	}
+	path := filepath.Join(t.TempDir(), "band.png")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := png.Encode(f, img); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+
+	j := &Job{Media: "29", Image: path, Rotate: 90}
+	j.DefaultJobValues()
+	media, err := j.Validate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := RenderJobImage(j, media)
+	if err != nil {
+		t.Fatalf("RenderJobImage rotate 90: %v", err)
+	}
+	// The band must span the full printable width (306-8 = 298 px); the
+	// old 1:1 rotation only covered 149 px.
+	minX, maxX := 1<<30, -1
+	for y := 0; y < out.Bounds().Dy(); y++ {
+		for x := 0; x < out.Bounds().Dx(); x++ {
+			if out.GrayAt(x, y).Y < 128 {
+				if x < minX {
+					minX = x
+				}
+				if x > maxX {
+					maxX = x
+				}
+			}
+		}
+	}
+	if maxX < 0 {
+		t.Fatal("no ink rendered")
+	}
+	if maxX-minX+1 < 290 {
+		t.Errorf("rotated image should fill the printable width: ink spans %d px", maxX-minX+1)
+	}
+	// The label length is the rotated height; the band's rows become the
+	// label's columns, so the auto-fit label is clamped to the printer
+	// minimum (12.7 mm), not left at the full rotated canvas height.
+	if out.Bounds().Dy() != MMToDots(MinLengthMM) {
+		t.Errorf("auto-fit label should clamp to the printer minimum (%d rows), got %d", MMToDots(MinLengthMM), out.Bounds().Dy())
+	}
+}
+
+// TestRenderRotate90ImageFixedLength verifies that a rotated image that
+// does not fit an explicit label length reports a helpful error instead of
+// an internal one.
+func TestRenderRotate90ImageFixedLength(t *testing.T) {
+	path := writeTestPNG(t, 100, 50)
+	j := &Job{Media: "29", Image: path, Rotate: 90, LengthMM: 30}
+	j.DefaultJobValues()
+	media, err := j.Validate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = RenderJobImage(j, media)
+	if err == nil {
+		t.Fatal("expected error for rotated image taller than the label length")
+	}
+	if !strings.Contains(err.Error(), "increase --length") {
+		t.Errorf("unexpected error: %v", err)
 	}
 }
 
@@ -514,16 +600,18 @@ func TestRenderDieCut(t *testing.T) {
 	}
 }
 
-// writeTestPNG writes a w x h white image with a black vertical strip on
-// the left edge and returns the file path.
+// writeTestPNG writes a w x h image with black vertical stripes on every
+// even column (a pattern covering the full image area) and returns the
+// file path.
 func writeTestPNG(t *testing.T, w, h int) string {
 	t.Helper()
 	img := image.NewGray(image.Rect(0, 0, w, h))
+	for i := range img.Pix {
+		img.Pix[i] = 0xFF
+	}
 	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
-			if x < w/10 {
-				img.SetGray(x, y, color.Gray{Y: 0})
-			}
+		for x := 0; x < w; x += 2 {
+			img.SetGray(x, y, color.Gray{Y: 0})
 		}
 	}
 	path := filepath.Join(t.TempDir(), "test.png")

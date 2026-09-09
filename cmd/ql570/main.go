@@ -91,7 +91,8 @@ print flags:
   --cut=true               auto cut (default true)
   --cut-every 1            cut after every n labels
   --mirror                 mirror the label horizontally
-  --rotate 0|90|180|270    rotate the content
+  --rotate 0|90|180|270    rotate the content (rotated images are scaled
+                           to fill the label width)
   --margin-top 0           top margin in mm
   --margin-bottom 0        bottom margin in mm
   --margin-left 0          left offset/margin in mm
