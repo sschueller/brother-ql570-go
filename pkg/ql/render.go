@@ -352,9 +352,6 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 		if width > height {
 			return nil, fmt.Errorf("cannot rotate 90/270 degrees: media %s is wider (%d px) than long (%d px)", media.ID, width, height)
 		}
-		if contentH > cw {
-			return nil, fmt.Errorf("cannot rotate 90/270 degrees: content is %d px tall but the printable width is only %d px", contentH, cw)
-		}
 		// The canvas may be wider than the printable width when a rotated
 		// image fills the label (its pre-rotation width becomes the label
 		// length), so rotate the full canvas.
@@ -370,6 +367,25 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 				}
 				rot.set(xx, yy, img.at(sx, sy))
 			}
+		}
+		// Scale the rotated content so its width matches the content area
+		// (width minus margins and the side padding). An image alone is
+		// already composed at that size, so this is a no-op; taller
+		// content (text above the image, top margins) shrinks uniformly
+		// instead of being rejected.
+		targetW := cw - leftMargin - rightMargin - 2*sideMargin
+		if targetW < 1 {
+			targetW = 1
+		}
+		if rW != targetW {
+			s := float64(targetW) / float64(rW)
+			nW, nH := targetW, int(math.Round(float64(rH)*s))
+			if nH < 1 {
+				nH = 1
+			}
+			scaled := newCanvas(nW, nH)
+			draw.BiLinear.Scale(scaled.gray, scaled.gray.Bounds(), rot.gray, rot.gray.Bounds(), draw.Over, nil)
+			rot = scaled
 		}
 	}
 

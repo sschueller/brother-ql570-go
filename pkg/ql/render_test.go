@@ -368,6 +368,44 @@ func TestImageTrimMargins(t *testing.T) {
 	}
 }
 
+// TestRenderRotate90TextAndImage verifies that content taller than the
+// printable width (a text line above an image) is uniformly scaled down
+// when rotated 90/270 degrees, instead of being rejected.
+func TestRenderRotate90TextAndImage(t *testing.T) {
+	path := writeTestPNG(t, 100, 50)
+	j := &Job{Media: "62", Text: []string{"LABEL"}, Image: path, Rotate: 90}
+	j.DefaultJobValues()
+	media, err := j.Validate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	img, err := RenderJobImage(j, media)
+	if err != nil {
+		t.Fatalf("rotate 90 with text + image: %v", err)
+	}
+	// The rotated content must span the content area width (688 of the
+	// 696 printable px on 62 mm media).
+	minX, maxX := 1<<30, -1
+	for y := 0; y < img.Bounds().Dy(); y++ {
+		for x := 0; x < img.Bounds().Dx(); x++ {
+			if img.GrayAt(x, y).Y < 128 {
+				if x < minX {
+					minX = x
+				}
+				if x > maxX {
+					maxX = x
+				}
+			}
+		}
+	}
+	if maxX < 0 {
+		t.Fatal("no ink rendered")
+	}
+	if maxX-minX+1 < 675 {
+		t.Errorf("rotated content should fill the printable width: %d px", maxX-minX+1)
+	}
+}
+
 func TestRenderQRAndBarcode(t *testing.T) {
 	j := &Job{
 		Text:     []string{"rack-7"},
