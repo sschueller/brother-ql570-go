@@ -2,6 +2,11 @@ package ql
 
 import (
 	"bytes"
+	"image"
+	"image/color"
+	"image/png"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -506,6 +511,127 @@ func TestRenderDieCut(t *testing.T) {
 	}
 	if len(rows) != 1109 {
 		t.Fatalf("die-cut row count %d, want 1109", len(rows))
+	}
+}
+
+// writeTestPNG writes a w x h white image with a black vertical strip on
+// the left edge and returns the file path.
+func writeTestPNG(t *testing.T, w, h int) string {
+	t.Helper()
+	img := image.NewGray(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			if x < w/10 {
+				img.SetGray(x, y, color.Gray{Y: 0})
+			}
+		}
+	}
+	path := filepath.Join(t.TempDir(), "test.png")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := png.Encode(f, img); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// TestRenderImageFitLabel verifies image_fit=label scales the whole image
+// into the printable area of a fixed-length label, where the default
+// width fit would overflow.
+func TestRenderImageFitLabel(t *testing.T) {
+	// 10x400 px: the width fit would be 228x9120 px, far taller than the
+	// 202 px printable height of 23x23 media.
+	path := writeTestPNG(t, 10, 400)
+	j := &Job{Media: "23x23", Image: path}
+	j.DefaultJobValues()
+	media, err := j.Validate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RenderJob(j, media); err == nil {
+		t.Fatal("expected overflow error for a tall image with the default width fit")
+	}
+	j.ImageFit = ImageFitLabel
+	img, err := RenderJobImage(j, media)
+	if err != nil {
+		t.Fatalf("RenderJobImage fit=label: %v", err)
+	}
+	if b := img.Bounds(); b.Dx() != media.PrintableWidthDots || b.Dy() != media.PrintableHeightDots {
+		t.Fatalf("label size %dx%d, want %dx%d", b.Dx(), b.Dy(), media.PrintableWidthDots, media.PrintableHeightDots)
+	}
+	// The fitted image is ~5 px wide (aspect preserved); the ink must be a
+	// narrow strip near the left edge, not full width.
+	maxInkX := -1
+	for y := 0; y < img.Bounds().Dy(); y++ {
+		for x := 0; x < img.Bounds().Dx(); x++ {
+			if img.GrayAt(x, y).Y < 128 {
+				if x > maxInkX {
+					maxInkX = x
+				}
+			}
+		}
+	}
+	if maxInkX < 0 {
+		t.Fatal("no ink rendered")
+	}
+	if maxInkX > 20 {
+		t.Errorf("fitted image should be a narrow strip, ink reaches x=%d", maxInkX)
+	}
+}
+
+// TestRenderImageFitLabelContinuous verifies that image_fit=label on
+// continuous media with an explicit length fits the image within both the
+// width and the chosen length.
+func TestRenderImageFitLabelContinuous(t *testing.T) {
+	// 1000x1000 px on 29x60 mm media: width fit gives 298x298 px (fits),
+	// so this exercises the label box rather than an overflow.
+	path := writeTestPNG(t, 1000, 1000)
+	j := &Job{Media: "29", Image: path, LengthMM: 60, ImageFit: ImageFitLabel}
+	j.DefaultJobValues()
+	media, err := j.Validate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	img, err := RenderJobImage(j, media)
+	if err != nil {
+		t.Fatalf("RenderJobImage fit=label: %v", err)
+	}
+	if img.Bounds().Dy() != MMToDots(60) {
+		t.Fatalf("label height %d, want %d", img.Bounds().Dy(), MMToDots(60))
+	}
+	// Find the ink bounding box; it must be fully inside the label and
+	// keep the square aspect ratio (width == height within rounding).
+	minX, maxX, minY, maxY := 1<<30, -1, 1<<30, -1
+	for y := 0; y < img.Bounds().Dy(); y++ {
+		for x := 0; x < img.Bounds().Dx(); x++ {
+			if img.GrayAt(x, y).Y < 128 {
+				if x < minX {
+					minX = x
+				}
+				if x > maxX {
+					maxX = x
+				}
+				if y < minY {
+					minY = y
+				}
+				if y > maxY {
+					maxY = y
+				}
+			}
+		}
+	}
+	if maxX < 0 {
+		t.Fatal("no ink rendered")
+	}
+	if minY < 0 || maxY >= img.Bounds().Dy() {
+		t.Errorf("ink outside the label vertically: y %d..%d", minY, maxY)
+	}
+	w, h := maxX-minX+1, maxY-minY+1
+	if diff := w - h; diff < -2 || diff > 2 {
+		t.Errorf("aspect not preserved: %dx%d", w, h)
 	}
 }
 

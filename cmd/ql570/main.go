@@ -12,13 +12,17 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
+	"github.com/sschueller/brother-ql570-go/pkg/pdf"
 	"github.com/sschueller/brother-ql570-go/pkg/ql"
 )
 
@@ -70,6 +74,11 @@ print flags:
   --qr "content"           render a QR code
   --barcode "content"      render a Code128 barcode
   --image file.png         print a PNG/JPEG/GIF image (scaled to width)
+  --pdf file.pdf           print a PDF (rasterized at 300 dpi; one label
+                           per page, or use --pdf-page to pick one page)
+  --pdf-page N             print only page N (1-based) of --pdf
+  --fit                    fit the image/PDF page onto the label (whole
+                           picture inside the printable area, aspect kept)
   --font file.ttf          TTF font (default: embedded Go Regular)
   --font-size 10           font size in points
   --length 40              label length in mm (continuous media; default:
@@ -121,6 +130,16 @@ func signalContext() context.Context {
 	return ctx
 }
 
+// tempPrefix returns a random file name prefix for temporary render
+// outputs (e.g. PDF pages rasterized for printing).
+func tempPrefix(kind string) string {
+	var id [8]byte
+	if _, err := rand.Read(id[:]); err != nil {
+		return fmt.Sprintf("ql570-%s-%d", kind, time.Now().UnixNano())
+	}
+	return fmt.Sprintf("ql570-%s-%s", kind, hex.EncodeToString(id[:]))
+}
+
 // parseSetFlags parses args and returns the set of flag names that were
 // provided on the command line.
 func parseSetFlags(fs *flag.FlagSet, args []string) (map[string]bool, error) {
@@ -137,15 +156,19 @@ func cmdPrint(args []string) error {
 	var texts stringList
 	var (
 		qr, barcode, image, font, media, device, align, compress, jobFile, dryRun string
+		pdfFile                                                                   string
 		fontSize, length, marginTop, marginBottom, cableFactor                    float64
 		marginLeft, marginRight                                                   float64
-		copies, cutEvery, rotate, threshold, feedDots                             int
-		cut, mirror, dither, hires, quality, cable                                bool
+		copies, cutEvery, rotate, threshold, feedDots, pdfPage                    int
+		cut, mirror, dither, hires, quality, cable, fit                           bool
 	)
 	fs.Var(&texts, "text", "text line (repeatable)")
 	fs.StringVar(&qr, "qr", "", "QR code content")
 	fs.StringVar(&barcode, "barcode", "", "Code128 barcode content")
 	fs.StringVar(&image, "image", "", "image file (PNG/JPEG/GIF)")
+	fs.StringVar(&pdfFile, "pdf", "", "PDF file to print (one label per page)")
+	fs.IntVar(&pdfPage, "pdf-page", 0, "print only this PDF page (1-based)")
+	fs.BoolVar(&fit, "fit", false, "fit the image/PDF page onto the label instead of full width")
 	fs.StringVar(&font, "font", "", "TTF font file")
 	fs.Float64Var(&fontSize, "font-size", 10, "font size in points")
 	fs.Float64Var(&length, "length", 0, "label length in mm (continuous media, default fits content)")
@@ -180,7 +203,7 @@ func cmdPrint(args []string) error {
 	// Content flags that make no sense combined with a multi-label job
 	// file (each label carries its own options in the JSON array).
 	contentFlags := []string{
-		"text", "qr", "barcode", "image", "font", "font-size", "length",
+		"text", "qr", "barcode", "image", "pdf", "pdf-page", "fit", "font", "font-size", "length",
 		"media", "copies", "cut", "cut-every", "mirror", "rotate",
 		"margin-top", "margin-bottom", "margin-left", "margin-right", "align", "compress", "dither",
 		"threshold", "hires", "feed-dots", "quality", "cable", "cable-factor",
@@ -227,6 +250,13 @@ func cmdPrint(args []string) error {
 		}
 		if set["image"] {
 			job.Image = image
+		}
+		if set["fit"] {
+			if fit {
+				job.ImageFit = ql.ImageFitLabel
+			} else {
+				job.ImageFit = ql.ImageFitWidth
+			}
 		}
 		if set["font"] {
 			job.Font = font
@@ -298,6 +328,59 @@ func cmdPrint(args []string) error {
 			job.Device = device
 		}
 		jobs = []ql.Job{job}
+
+		// --pdf renders the PDF's pages to temporary PNG files and turns
+		// the job into one label per page (or a single label with
+		// --pdf-page). The files are removed after the print.
+		if pdfFile != "" {
+			if set["image"] {
+				return fmt.Errorf("--pdf cannot be combined with --image")
+			}
+			if set["pdf-page"] && pdfPage < 1 {
+				return fmt.Errorf("--pdf-page must be a positive page number, got %d", pdfPage)
+			}
+			data, err := os.ReadFile(pdfFile)
+			if err != nil {
+				return fmt.Errorf("reading PDF: %w", err)
+			}
+			pages, err := pdf.PageCount(data)
+			if err != nil {
+				return fmt.Errorf("parsing PDF: %w", err)
+			}
+			if pages == 0 {
+				return fmt.Errorf("PDF has no pages")
+			}
+			idxs := make([]int, 0, pages)
+			if pdfPage > 0 {
+				if pdfPage > pages {
+					return fmt.Errorf("--pdf-page %d out of range: the PDF has %d page(s)", pdfPage, pages)
+				}
+				idxs = append(idxs, pdfPage-1)
+			} else {
+				if pages > pdf.MaxPages {
+					return fmt.Errorf("PDF has %d pages (max %d with --pdf); use --pdf-page to print one page or split the document", pages, pdf.MaxPages)
+				}
+				for i := 0; i < pages; i++ {
+					idxs = append(idxs, i)
+				}
+			}
+			paths, err := pdf.RenderPNGFiles(data, idxs, pdf.MaxPixels, os.TempDir(), tempPrefix("pdf"))
+			if err != nil {
+				return fmt.Errorf("rendering PDF: %w", err)
+			}
+			defer func() {
+				for _, p := range paths {
+					_ = os.Remove(p)
+				}
+			}()
+			rendered := make([]ql.Job, 0, len(paths))
+			for _, p := range paths {
+				jj := job
+				jj.Image = p
+				rendered = append(rendered, jj)
+			}
+			jobs = rendered
+		}
 	}
 
 	if dryRun != "" {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -23,6 +24,7 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 
+	"github.com/sschueller/brother-ql570-go/pkg/pdf"
 	"github.com/sschueller/brother-ql570-go/pkg/ql"
 	"github.com/sschueller/brother-ql570-go/web"
 )
@@ -34,7 +36,9 @@ import (
 //	GET  /              embedded single-page web UI (label designer)
 //	POST /v1/print      body = ql.Job JSON; prints synchronously
 //	POST /v1/preview    body = ql.Job JSON; PNG preview of the label
-//	POST /v1/upload     multipart image upload; returns {"path": "..."}
+//	POST /v1/upload     multipart image or PDF upload; images return
+//	                    {"path": "..."}, PDFs are rasterized page by page
+//	                    and return {"type": "pdf", "pages": N, "paths": [...]}
 //	GET  /v1/status     current printer status
 //	GET  /v1/info       model/media info (same as status)
 //	GET  /healthz       liveness probe
@@ -249,9 +253,12 @@ func newServeMux(pool *printerPool, token string) *http.ServeMux {
 		}
 	})))
 
-	// POST /v1/upload accepts a multipart image upload ("file" field),
-	// stores it under /tmp/ql570-<random>.png and returns the path for
-	// use as the Image field of a job.
+	// POST /v1/upload accepts a multipart upload ("file" field) with an
+	// image (PNG/JPEG/GIF) or a PDF. Images are stored under
+	// /tmp/ql570-<random>.png and the path is returned for use as the
+	// Image field of a job. PDFs are rasterized page by page into PNG
+	// files (up to pdf.MaxPages pages) and returned as a list of paths,
+	// one per page.
 	mux.Handle("POST /v1/upload", auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		const maxUpload = 20 << 20
 		r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
@@ -265,12 +272,8 @@ func newServeMux(pool *printerPool, token string) *http.ServeMux {
 			return
 		}
 		defer f.Close()
-		cfg, _, err := image.DecodeConfig(f)
+		data, err := io.ReadAll(f)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "not a supported image (PNG/JPEG/GIF): " + err.Error()})
-			return
-		}
-		if _, err := f.Seek(0, io.SeekStart); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "reading upload: " + err.Error()})
 			return
 		}
@@ -279,14 +282,52 @@ func newServeMux(pool *printerPool, token string) *http.ServeMux {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "generating file name: " + err.Error()})
 			return
 		}
-		path := filepath.Join(os.TempDir(), "ql570-"+hex.EncodeToString(id[:])+".png")
+		prefix := "ql570-" + hex.EncodeToString(id[:])
+
+		if pdf.IsPDF(data) {
+			pages, err := pdf.PageCount(data)
+			if err != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "not a valid PDF: " + err.Error()})
+				return
+			}
+			if pages == 0 {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "PDF has no pages"})
+				return
+			}
+			if pages > pdf.MaxPages {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("PDF has %d pages (max %d); split the document or upload it in parts", pages, pdf.MaxPages)})
+				return
+			}
+			idxs := make([]int, pages)
+			for i := range idxs {
+				idxs[i] = i
+			}
+			paths, err := pdf.RenderPNGFiles(data, idxs, pdf.MaxPixels, os.TempDir(), prefix)
+			if err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{
+				"type":  "pdf",
+				"pages": pages,
+				"paths": paths,
+			})
+			return
+		}
+
+		cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "not a supported image (PNG/JPEG/GIF): " + err.Error()})
+			return
+		}
+		path := filepath.Join(os.TempDir(), prefix+".png")
 		dst, err := os.Create(path)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "storing upload: " + err.Error()})
 			return
 		}
 		defer dst.Close()
-		if _, err := io.Copy(dst, f); err != nil {
+		if _, err := io.Copy(dst, bytes.NewReader(data)); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "storing upload: " + err.Error()})
 			return
 		}
