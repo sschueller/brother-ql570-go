@@ -28,8 +28,29 @@ type canvas struct {
 
 func newCanvas(w, h int) *canvas {
 	c := &canvas{gray: image.NewGray(image.Rect(0, 0, w, h)), w: w, h: h}
-	draw.Draw(c.gray, c.gray.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
+	for i := range c.gray.Pix {
+		c.gray.Pix[i] = 0xFF
+	}
 	return c
+}
+
+// ensureH grows the canvas to at least minH rows, filling the new rows
+// white (0xFF) and preserving the existing pixels.
+func (c *canvas) ensureH(minH int) {
+	if minH <= c.h {
+		return
+	}
+	newH := c.h * 2
+	if newH < minH {
+		newH = minH
+	}
+	ng := image.NewGray(image.Rect(0, 0, c.w, newH))
+	copy(ng.Pix, c.gray.Pix)
+	for i := c.w * c.h; i < len(ng.Pix); i++ {
+		ng.Pix[i] = 0xFF
+	}
+	c.gray = ng
+	c.h = newH
 }
 
 func (c *canvas) at(x, y int) uint8 {
@@ -99,14 +120,16 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 	auto := media.FormFactor == Endless && job.LengthMM <= 0
 	height := job.LengthDots(media)
 	if auto {
-		// Compose on the maximum canvas; the final length is derived from
-		// the content height below.
+		// The label length is derived from the content below; use the
+		// maximum as the logical limit for overflow checks only.
 		height = QL570.MaxLengthDots
 	}
 
+	// cw, ch are the canvas dimensions in scale units. ch is the logical
+	// label height used for overflow checks; for auto-fit labels the
+	// backing canvas starts small and grows as elements are added, so a
+	// short label does not allocate the full maximum length.
 	cw, ch := width*scale, height*scale
-	img := newCanvas(cw, ch)
-
 	face, err := loadFace(job.Font, job.FontSize*DPI/72*float64(scale))
 	if err != nil {
 		return nil, err
@@ -118,6 +141,15 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 	rightMargin := MMToDots(job.MarginRightMM) * scale
 	sideMargin := 4 * scale
 	gap := 4 * scale
+
+	allocH := ch
+	if auto {
+		allocH = topMargin + 16*scale
+		if allocH > ch {
+			allocH = ch
+		}
+	}
+	img := newCanvas(cw, allocH)
 
 	// Horizontal content area: the printable width minus the left/right
 	// margins. All elements are aligned within this area.
@@ -155,6 +187,10 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 			return nil, fmt.Errorf("text line too wide for media %s: %.0f px > %d px (%.2f mm > %.2f mm); use a smaller --font-size or wider media",
 				media.ID, lineW, contentW, lineW*25.4/DPI, float64(contentW)*25.4/DPI)
 		}
+		if y+lineHeight > ch-bottomMargin {
+			return nil, overflowErr("the text", lineHeight)
+		}
+		img.ensureH(y + lineHeight)
 		x := leftMargin + alignedX(job.Align, int(lineW), contentW)
 		drawText(img, face, x, y+ascent, line)
 		y += lineHeight
@@ -181,6 +217,7 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 		if y+qrSize > ch-bottomMargin {
 			return nil, overflowErr("the QR code", qrSize)
 		}
+		img.ensureH(y + qrSize)
 		x := leftMargin + alignedX(job.Align, qrSize, contentW)
 		drawQR(img, qr.Bitmap(), x, y, qrSize)
 		y += qrSize + gap
@@ -196,6 +233,7 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 		if y+barH > ch-bottomMargin {
 			return nil, overflowErr("the barcode", barH)
 		}
+		img.ensureH(y + barH)
 		x := leftMargin + alignedX(job.Align, barW, contentW)
 		scaled, err := barcode.Scale(bc, barW, barH)
 		if err != nil {
@@ -219,6 +257,7 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 		if y+imgH > ch-bottomMargin {
 			return nil, overflowErr("the image", imgH)
 		}
+		img.ensureH(y + imgH)
 		x := leftMargin + alignedX(job.Align, imgW, contentW)
 		dst := image.Rect(x, y, x+imgW, y+imgH)
 		draw.BiLinear.Scale(img.gray, dst, src, b, draw.Over, nil)
@@ -283,8 +322,13 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 		rot = sq
 	}
 
-	// Stage 3: paste into the final canvas, horizontally centered.
+	// Stage 3: paste into the final canvas, horizontally centered. For
+	// auto-fit labels the canvas is only as tall as the rotated content;
+	// the rows below it are all white anyway.
 	finalW, finalH := width, height*scale
+	if auto {
+		finalH = rot.h
+	}
 	out := newCanvas(finalW, finalH)
 	if rot.w > finalW || rot.h > finalH {
 		return nil, fmt.Errorf("internal error: rotated content %dx%d does not fit %dx%d", rot.w, rot.h, finalW, finalH)
