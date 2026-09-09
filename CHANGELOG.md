@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.6.0](https://github.com/sschueller/brother-ql570-go/compare/v0.5.0...v0.6.0) (2026-09-09)
+
+
+### Features
+
+* **ql:** add image_trim option to crop white margins around images ([a6f1b04](https://github.com/sschueller/brother-ql570-go/commit/a6f1b04be144a53555f5cfee49f0c560e9d413d6))
+* **ql:** fill the label width when rotating images 90/270 degrees ([98b7f9f](https://github.com/sschueller/brother-ql570-go/commit/98b7f9fa4868ec6d14f10b9f32bdb40f614d408b))
+
+
+### Bug Fixes
+
+* **pdf:** respect bitmap row stride when copying rendered pages ([26e1005](https://github.com/sschueller/brother-ql570-go/commit/26e10053cc361b4a0658488b0afa92dcd7bda9c2))
+* **ql:** scale rotated content to fit the printable width instead of rejecting it ([d300b8b](https://github.com/sschueller/brother-ql570-go/commit/d300b8bfbc621c7aae73b97ad6552bd50f398c84))
+
 ## [0.5.0](https://github.com/sschueller/brother-ql570-go/compare/v0.4.1...v0.5.0) (2026-09-09)
 
 
