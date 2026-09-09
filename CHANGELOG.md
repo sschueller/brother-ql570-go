@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/sschueller/brother-ql570-go/compare/v0.4.1...v0.5.0) (2026-09-09)
+
+
+### Features
+
+* add PDF upload/print and image fit ([d844c15](https://github.com/sschueller/brother-ql570-go/commit/d844c15e644c6d825daa5c8373487ae5137e8d9d))
+
 ## [0.4.1](https://github.com/sschueller/brother-ql570-go/compare/v0.4.0...v0.4.1) (2026-09-09)
 
 
