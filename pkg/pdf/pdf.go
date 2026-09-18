@@ -71,12 +71,15 @@ func instance() (pdfium.Pdfium, error) {
 // Init initializes the WebAssembly PDF engine ahead of use, e.g. at
 // daemon startup, so the first render does not pay the one-time module
 // compile cost. Rendering calls initialize the engine implicitly, so
-// Init is only a warm-up; it is safe to call any number of times.
+// Init is only a warm-up; it is safe to call any number of times. The
+// warmed instance is released immediately: with worker reuse the pool
+// keeps it alive for the next render.
 func Init() error {
-	_, err := instance()
+	inst, err := instance()
 	if err != nil {
 		return err
 	}
+	inst.Close()
 	return nil
 }
 
