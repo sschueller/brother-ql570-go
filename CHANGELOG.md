@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.1](https://github.com/sschueller/brother-ql570-go/compare/v0.6.0...v0.6.1) (2026-09-18)
+
+
+### Bug Fixes
+
+* **pdf:** release the warmed instance so uploads can borrow it ([a3f138a](https://github.com/sschueller/brother-ql570-go/commit/a3f138a68b2c3aea7bdc4725a1d14f424f3ef82f))
+
+
+### Performance Improvements
+
+* **pdf:** warm the PDF engine at daemon startup and reuse the WASM worker ([c18f9de](https://github.com/sschueller/brother-ql570-go/commit/c18f9debc5cf6690f7f8f802ea3c14ab3a198d5c))
+
 ## [0.6.0](https://github.com/sschueller/brother-ql570-go/compare/v0.5.0...v0.6.0) (2026-09-09)
 
 
