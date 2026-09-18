@@ -52,9 +52,10 @@ var (
 func instance() (pdfium.Pdfium, error) {
 	initOnce.Do(func() {
 		pool, initErr = webassembly.Init(webassembly.Config{
-			MinIdle:  1,
-			MaxIdle:  1,
-			MaxTotal: 1,
+			MinIdle:      1,
+			MaxIdle:      1,
+			MaxTotal:     1,
+			ReuseWorkers: true,
 		})
 	})
 	if initErr != nil {
@@ -65,6 +66,18 @@ func instance() (pdfium.Pdfium, error) {
 		return nil, fmt.Errorf("starting the PDF engine: %w", err)
 	}
 	return inst, nil
+}
+
+// Init initializes the WebAssembly PDF engine ahead of use, e.g. at
+// daemon startup, so the first render does not pay the one-time module
+// compile cost. Rendering calls initialize the engine implicitly, so
+// Init is only a warm-up; it is safe to call any number of times.
+func Init() error {
+	_, err := instance()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // IsPDF reports whether data starts with the PDF magic header.

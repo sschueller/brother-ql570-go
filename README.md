@@ -222,6 +222,12 @@ a few megabytes larger.
   deleted after printing.
 - Pages larger than 4096 px at 300 dpi (poster size and up) are rendered
   scaled down to that bound — far beyond what a 62 mm label can resolve.
+- The daemon pre-warms the PDF engine in the background at startup, so the
+  first upload does not pay the one-time WebAssembly compile cost (tens of
+  seconds on small ARM boards). The engine needs executable memory for its
+  JIT compiler: don't set `MemoryDenyWriteExecute=yes` in the systemd unit,
+  or PDF rendering silently falls back to the interpreter and becomes
+  ~100x slower.
 - The `image_fit` field of `ql.Job` (`"width"`, default, or `"label"`) also
   applies to uploaded images: `"label"` fits the whole picture within a
   fixed-length label (die-cut media or an explicit `length_mm`). The

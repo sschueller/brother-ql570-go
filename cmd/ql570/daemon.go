@@ -64,6 +64,17 @@ func cmdServe(args []string) error {
 	if pool.get() == nil {
 		log.Printf("printer not connected; the UI and API stay available and the connection is retried every %s", reconnectInterval)
 	}
+	// Warm the PDF engine in the background: the first PDF upload would
+	// otherwise pay the one-time WebAssembly compile cost, which takes
+	// tens of seconds on small ARM boards (and could outlast a reverse
+	// proxy's read timeout).
+	go func() {
+		if err := pdf.Init(); err != nil {
+			log.Printf("PDF engine failed to initialize: %v (PDF uploads will fail)", err)
+			return
+		}
+		log.Printf("PDF engine ready")
+	}()
 	log.Printf("ql570 %s daemon listening on %s", Version, *listen)
 	fmt.Fprintf(os.Stderr, "ql570 %s daemon listening on %s\n", Version, *listen)
 	return srv.ListenAndServe()
