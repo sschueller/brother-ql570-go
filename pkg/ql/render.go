@@ -466,9 +466,16 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 		return nil, fmt.Errorf("internal error: rotated content %dx%d does not fit %dx%d", rot.w, rot.h, finalW, finalH)
 	}
 	x0 := (finalW - rot.w) / 2
+	y0 := 0
+	switch job.VAlign {
+	case VAlignCenter:
+		y0 = (finalH - rot.h) / 2
+	case VAlignBottom:
+		y0 = finalH - rot.h
+	}
 	for yy := 0; yy < rot.h; yy++ {
 		for xx := 0; xx < rot.w; xx++ {
-			out.set(x0+xx, yy, rot.at(xx, yy))
+			out.set(x0+xx, y0+yy, rot.at(xx, yy))
 		}
 	}
 

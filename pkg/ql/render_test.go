@@ -881,6 +881,108 @@ func TestRenderDieCut(t *testing.T) {
 	}
 }
 
+// TestRenderVAlign verifies that valign positions the content within a
+// fixed-length label: top (default) keeps it at the top, center puts the
+// ink in the middle and bottom pushes it to the end. A barcode is used
+// because its bars span the full composed block height, so the expected
+// positions are exact.
+func TestRenderVAlign(t *testing.T) {
+	inkBounds := func(valign string) (int, int) {
+		t.Helper()
+		j := &Job{Barcode: "ABC-123456", LengthMM: 60}
+		j.VAlign = valign
+		j.DefaultJobValues()
+		media, err := j.Validate()
+		if err != nil {
+			t.Fatal(err)
+		}
+		rows, err := RenderJob(j, media)
+		if err != nil {
+			t.Fatal(err)
+		}
+		first, last := -1, -1
+		for i, row := range rows {
+			if allZero(row) {
+				continue
+			}
+			if first < 0 {
+				first = i
+			}
+			last = i
+		}
+		return first, last
+	}
+
+	total := MMToDots(60)
+	barH := MMToDots(10)
+
+	topFirst, topLast := inkBounds(VAlignTop)
+	if topFirst != 0 || topLast != barH-1 {
+		t.Fatalf("top: ink rows %d..%d, want 0..%d", topFirst, topLast, barH-1)
+	}
+
+	centerFirst, centerLast := inkBounds(VAlignCenter)
+	mid := total / 2
+	centerMid := centerFirst + (centerLast-centerFirst)/2
+	d := centerMid - mid
+	if d < 0 {
+		d = -d
+	}
+	if d > 1 {
+		t.Errorf("center: ink midpoint %d, label midpoint %d (off by %d)", centerMid, mid, d)
+	}
+
+	bottomFirst, bottomLast := inkBounds(VAlignBottom)
+	if bottomLast != total-1 {
+		t.Errorf("bottom: last ink row %d, want %d", bottomLast, total-1)
+	}
+	if bottomFirst <= centerFirst {
+		t.Errorf("bottom: first ink row %d, want below center's %d", bottomFirst, centerFirst)
+	}
+	if centerFirst <= topFirst {
+		t.Errorf("center: first ink row %d, want below top's %d", centerFirst, topFirst)
+	}
+
+	// The placements must keep the same ink height.
+	inkH := topLast - topFirst + 1
+	if h := centerLast - centerFirst + 1; h != inkH {
+		t.Errorf("center ink height %d != top ink height %d", h, inkH)
+	}
+	if h := bottomLast - bottomFirst + 1; h != inkH {
+		t.Errorf("bottom ink height %d != top ink height %d", h, inkH)
+	}
+}
+
+// TestRenderVAlignAutoFit verifies that valign has no effect when the
+// label length auto-fits the content: the label is exactly as tall as the
+// content, so there is no extra space to distribute.
+func TestRenderVAlignAutoFit(t *testing.T) {
+	rows := func(valign string) [][]byte {
+		t.Helper()
+		j := textJob("SW-01 uplink", 0)
+		j.VAlign = valign
+		j.DefaultJobValues()
+		media, err := j.Validate()
+		if err != nil {
+			t.Fatal(err)
+		}
+		r, err := RenderJob(j, media)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	top, center, bottom := rows(VAlignTop), rows(VAlignCenter), rows(VAlignBottom)
+	if len(top) != len(center) || len(top) != len(bottom) {
+		t.Fatalf("auto-fit heights differ: %d/%d/%d", len(top), len(center), len(bottom))
+	}
+	for i := range top {
+		if !bytes.Equal(top[i], center[i]) || !bytes.Equal(top[i], bottom[i]) {
+			t.Fatalf("auto-fit rows differ at row %d", i)
+		}
+	}
+}
+
 // writeTestPNG writes a w x h image with black vertical stripes on every
 // even column (a pattern covering the full image area) and returns the
 // file path.

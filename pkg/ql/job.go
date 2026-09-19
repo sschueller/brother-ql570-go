@@ -14,6 +14,16 @@ const (
 	AlignRight  = "right"
 )
 
+// Vertical alignment of the content within a fixed-length label. It only
+// has an effect when the label length is fixed (die-cut media or an
+// explicit LengthMM); auto-fit labels are exactly as tall as the content,
+// so there is no extra space to distribute.
+const (
+	VAlignTop    = "top"
+	VAlignCenter = "center"
+	VAlignBottom = "bottom"
+)
+
 // Compression modes. The QL-570 only supports "none"; "tiff" is rejected
 // during validation.
 const (
@@ -122,6 +132,12 @@ type Job struct {
 	// left (default), center or right.
 	Align string `json:"align,omitempty"`
 
+	// VAlign is the vertical alignment of the composed content within a
+	// fixed-length label: top (default), center or bottom. With an
+	// auto-fit label length (continuous media without LengthMM) the
+	// label is exactly as tall as the content, so VAlign has no effect.
+	VAlign string `json:"valign,omitempty"`
+
 	// Compress selects the raster compression mode. Only "none" is
 	// supported by the QL-570.
 	Compress string `json:"compress,omitempty"`
@@ -180,6 +196,9 @@ func (j *Job) DefaultJobValues() {
 	if j.Align == "" {
 		j.Align = AlignLeft
 	}
+	if j.VAlign == "" {
+		j.VAlign = VAlignTop
+	}
 	if j.Compress == "" {
 		j.Compress = CompressNone
 	}
@@ -236,6 +255,11 @@ func (j *Job) Validate() (Media, error) {
 	case AlignLeft, AlignCenter, AlignRight:
 	default:
 		return Media{}, fmt.Errorf("align must be left, center or right, got %q", j.Align)
+	}
+	switch j.VAlign {
+	case VAlignTop, VAlignCenter, VAlignBottom:
+	default:
+		return Media{}, fmt.Errorf("valign must be top, center or bottom, got %q", j.VAlign)
 	}
 	switch j.ImageFit {
 	case "", ImageFitWidth, ImageFitLabel:

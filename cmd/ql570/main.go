@@ -102,6 +102,10 @@ print flags:
   --margin-left 0          left offset/margin in mm
   --margin-right 0         right margin in mm
   --align left|center|right
+  --valign top|center|bottom
+                           vertical alignment of the content within the
+                           label (fixed-length labels only: die-cut media
+                           or --length)
   --compress none|tiff     tiff is rejected on the QL-570 (unsupported)
   --dither                 Floyd-Steinberg dithering
   --threshold 50           grayscale threshold in percent (0-100)
@@ -160,12 +164,12 @@ func cmdPrint(args []string) error {
 	fs := flag.NewFlagSet("print", flag.ContinueOnError)
 	var texts stringList
 	var (
-		qr, barcode, image, font, media, device, align, compress, jobFile, dryRun string
-		pdfFile                                                                   string
-		fontSize, length, marginTop, marginBottom, cableFactor                    float64
-		marginLeft, marginRight                                                   float64
-		copies, cutEvery, rotate, threshold, feedDots, pdfPage                    int
-		cut, mirror, dither, hires, quality, cable, fit, trimMargins, barcodeText bool
+		qr, barcode, image, font, media, device, align, valign, compress, jobFile, dryRun string
+		pdfFile                                                                           string
+		fontSize, length, marginTop, marginBottom, cableFactor                            float64
+		marginLeft, marginRight                                                           float64
+		copies, cutEvery, rotate, threshold, feedDots, pdfPage                            int
+		cut, mirror, dither, hires, quality, cable, fit, trimMargins, barcodeText         bool
 	)
 	fs.Var(&texts, "text", "text line (repeatable)")
 	fs.StringVar(&qr, "qr", "", "QR code content")
@@ -192,6 +196,7 @@ func cmdPrint(args []string) error {
 	fs.Float64Var(&marginLeft, "margin-left", 0, "left offset/margin in mm")
 	fs.Float64Var(&marginRight, "margin-right", 0, "right margin in mm")
 	fs.StringVar(&align, "align", "", "left|center|right")
+	fs.StringVar(&valign, "valign", "", "top|center|bottom (fixed-length labels)")
 	fs.StringVar(&compress, "compress", "", "none|tiff")
 	fs.BoolVar(&dither, "dither", false, "Floyd-Steinberg dithering")
 	fs.IntVar(&threshold, "threshold", 0, "grayscale threshold percent (default 50)")
@@ -212,7 +217,7 @@ func cmdPrint(args []string) error {
 	contentFlags := []string{
 		"text", "qr", "barcode", "barcode-text", "image", "pdf", "pdf-page", "fit", "trim-margins", "font", "font-size", "length",
 		"media", "copies", "cut", "cut-every", "mirror", "rotate",
-		"margin-top", "margin-bottom", "margin-left", "margin-right", "align", "compress", "dither",
+		"margin-top", "margin-bottom", "margin-left", "margin-right", "align", "valign", "compress", "dither",
 		"threshold", "hires", "feed-dots", "quality", "cable", "cable-factor",
 	}
 
@@ -318,6 +323,9 @@ func cmdPrint(args []string) error {
 		}
 		if set["align"] {
 			job.Align = align
+		}
+		if set["valign"] {
+			job.VAlign = valign
 		}
 		if set["compress"] {
 			job.Compress = compress

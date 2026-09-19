@@ -33,6 +33,9 @@ func TestJobDefaults(t *testing.T) {
 	if j.Align != AlignLeft || j.Compress != CompressNone {
 		t.Errorf("align/compress defaults: %q/%q", j.Align, j.Compress)
 	}
+	if j.VAlign != VAlignTop {
+		t.Errorf("valign default: %q", j.VAlign)
+	}
 }
 
 func TestJobValidateContinuous(t *testing.T) {
@@ -142,6 +145,7 @@ func TestJobValidateOptions(t *testing.T) {
 		{"cut every 0", func(j *Job) { j.CutEvery = 0 }},
 		{"rotate 45", func(j *Job) { j.Rotate = 45 }},
 		{"align bogus", func(j *Job) { j.Align = "middle" }},
+		{"valign bogus", func(j *Job) { j.VAlign = "middle" }},
 		{"image fit bogus", func(j *Job) { j.ImageFit = "full" }},
 		{"compress tiff", func(j *Job) { j.Compress = CompressTIFF }},
 		{"threshold 101", func(j *Job) { j.Threshold = 101 }},

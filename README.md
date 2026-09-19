@@ -76,6 +76,7 @@ ql570 version
 | `--margin-top` / `--margin-bottom` | 0 | content margins in mm |
 | `--margin-left` / `--margin-right` | 0 | horizontal offset/margin inside the printable width, in mm |
 | `--align` | left | `left` \| `center` \| `right` |
+| `--valign` | top | `top` \| `center` \| `bottom` — vertical alignment of the content within the label (fixed-length labels only: die-cut media or `--length`) |
 | `--compress` | none | `tiff` is rejected: the QL-570 has no compression support |
 | `--dither` | false | Floyd-Steinberg dithering (photographs) |
 | `--threshold` | 50 | grayscale threshold in percent |
