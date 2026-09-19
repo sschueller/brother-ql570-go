@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.7.0](https://github.com/sschueller/brother-ql570-go/compare/v0.6.1...v0.7.0) (2026-09-19)
+
+
+### Features
+
+* **barcode:** add optional HRI text below Code128 ([5c50776](https://github.com/sschueller/brother-ql570-go/commit/5c50776f28524979710f39483f3bfa0c2b8cd868))
+* **render:** support vertical alignment on fixed-length labels ([74d2cf0](https://github.com/sschueller/brother-ql570-go/commit/74d2cf09e1b2b4e66520c6daa07d5f7cee41cc96))
+* **web:** add fixed label length option for continuous tape ([00cbe5d](https://github.com/sschueller/brother-ql570-go/commit/00cbe5d714ce1befadcf061061c89d51e7f9e394))
+
+
+### Bug Fixes
+
+* **ql:** add Code128 checksum and quiet zone ([e33ee6e](https://github.com/sschueller/brother-ql570-go/commit/e33ee6e3686b04dc0786f6c61495a45a5bb44bf4))
+
 ## [0.6.1](https://github.com/sschueller/brother-ql570-go/compare/v0.6.0...v0.6.1) (2026-09-18)
 
 
