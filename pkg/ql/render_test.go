@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/boombuler/barcode"
+	"github.com/boombuler/barcode/code128"
 )
 
 func textJob(text string, lengthMM float64) *Job {
@@ -481,6 +484,81 @@ func TestRenderBarcodeNotSolidBlock(t *testing.T) {
 	area := width * barHeight
 	if totalInk > area*9/10 {
 		t.Errorf("barcode nearly solid: %d/%d dots are black", totalInk, area)
+	}
+}
+
+// TestRenderBarcodeChecksumAndQuietZone is a regression test: the rendered
+// Code128 symbol must include the mandatory modulo-103 checksum symbol and
+// must be surrounded by a blank quiet zone of at least 10 module widths.
+func TestRenderBarcodeChecksumAndQuietZone(t *testing.T) {
+	const content = "ABC-123456"
+	j := &Job{Barcode: content, LengthMM: 30}
+	j.DefaultJobValues()
+	media, err := j.Validate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := RenderJob(j, media)
+	if err != nil {
+		t.Fatalf("RenderJob: %v", err)
+	}
+	width := media.PrintableWidthDots
+	leftMargin := MMToDots(j.MarginLeftMM)
+	rightMargin := MMToDots(j.MarginRightMM)
+	topMargin := MMToDots(j.MarginTopMM)
+	contentW := width - leftMargin - rightMargin
+	barH := MMToDots(10)
+
+	// Reconstruct the geometry renderJobToCanvas uses for the barcode.
+	bc, err := code128.Encode(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	modules := bc.Bounds().Dx()
+	total := contentW - 2*4
+	barW := total * modules / (modules + 2*code128QuietModules)
+	quiet := (total - barW) / 2
+	x := leftMargin + alignedX(j.Align, total, contentW) + quiet
+
+	moduleW := barW / modules
+	if quiet < code128QuietModules*moduleW {
+		t.Errorf("quiet zone %d px < %d module widths (%d px)", quiet, code128QuietModules, code128QuietModules*moduleW)
+	}
+
+	// The quiet zone must be blank on both sides.
+	for py := 0; py < barH; py++ {
+		for px := x - quiet; px < x; px++ {
+			if bitAt(rows, media, width, px, topMargin+py) {
+				t.Errorf("quiet zone not blank at (%d,%d)", px, py)
+				return
+			}
+		}
+		for px := x + barW; px < x+barW+quiet; px++ {
+			if bitAt(rows, media, width, px, topMargin+py) {
+				t.Errorf("quiet zone not blank at (%d,%d)", px, py)
+				return
+			}
+		}
+	}
+
+	// The bar pattern must match a spec-compliant encoding (with checksum),
+	// scaled exactly as the renderer scales it. If the renderer regressed to
+	// EncodeWithoutChecksum, the pattern (and geometry) would differ.
+	scaled, err := barcode.Scale(bc, barW, barH)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mismatch := 0
+	for py := 0; py < barH; py++ {
+		for px := 0; px < barW; px++ {
+			want := scaled.At(px, py) == color.Black
+			if bitAt(rows, media, width, x+px, topMargin+py) != want {
+				mismatch++
+			}
+		}
+	}
+	if mismatch > 0 {
+		t.Errorf("%d/%d barcode pixels differ from a checksummed Code128 encoding", mismatch, barW*barH)
 	}
 }
 

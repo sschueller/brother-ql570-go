@@ -19,6 +19,10 @@ import (
 	"golang.org/x/image/draw"
 )
 
+// code128QuietModules is the minimum quiet zone required on each side of a
+// Code 128 symbol, in module widths (ISO/IEC 15417 requires at least 10).
+const code128QuietModules = 10
+
 // canvas is a grayscale image with the native image.Gray convention:
 // 0 = black, 255 = white.
 type canvas struct {
@@ -245,17 +249,29 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 	}
 
 	if job.Barcode != "" {
-		bc, err := code128.EncodeWithoutChecksum(job.Barcode)
+		// Encode (not EncodeWithoutChecksum): the Code 128 spec requires
+		// the modulo-103 checksum symbol between the data and the stop
+		// pattern; most scanners refuse the symbol without it.
+		bc, err := code128.Encode(job.Barcode)
 		if err != nil {
 			return nil, fmt.Errorf("encoding Code128 barcode: %w", err)
 		}
-		barW := contentW - 2*sideMargin
 		barH := MMToDots(10) * scale
 		if y+barH > ch-bottomMargin {
 			return nil, overflowErr("the barcode", barH)
 		}
 		img.ensureH(y + barH)
-		x := leftMargin + alignedX(job.Align, barW, contentW)
+		// Reserve a quiet zone of at least 10 module widths on each side
+		// (the spec minimum) and scale the symbol into the remainder, so
+		// the bars do not run edge to edge.
+		modules := bc.Bounds().Dx()
+		total := contentW - 2*sideMargin
+		barW := total * modules / (modules + 2*code128QuietModules)
+		if barW < modules {
+			return nil, fmt.Errorf("media %s is too narrow (%d px) for a scannable Code128 barcode of %d modules", media.ID, total, modules)
+		}
+		quiet := (total - barW) / 2
+		x := leftMargin + alignedX(job.Align, total, contentW) + quiet
 		scaled, err := barcode.Scale(bc, barW, barH)
 		if err != nil {
 			return nil, fmt.Errorf("scaling barcode: %w", err)
