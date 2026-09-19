@@ -160,10 +160,6 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 	// backing canvas starts small and grows as elements are added, so a
 	// short label does not allocate the full maximum length.
 	cw, ch := width*scale, height*scale
-	face, err := loadFace(job.Font, job.FontSize*DPI/72*float64(scale))
-	if err != nil {
-		return nil, err
-	}
 
 	topMargin := MMToDots(job.MarginTopMM) * scale
 	bottomMargin := MMToDots(job.MarginBottomMM) * scale
@@ -202,17 +198,24 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 			elem, need, ch-bottomMargin-y)
 	}
 
-	metrics := face.Metrics()
-	// Int26_6.Ceil/Round already return whole pixels.
-	ascent := metrics.Ascent.Ceil()
-	descent := metrics.Descent.Ceil()
-	lineHeight := (ascent + descent) * 6 / 5
-	if lineHeight <= 0 {
-		lineHeight = int(job.FontSize*DPI/72*float64(scale)) * 6 / 5
-	}
-
-	for _, line := range job.Text {
-		lineW := measureString(face, line)
+	// Text is rendered line by line so each line can carry its own
+	// bold/italic style (and therefore its own face and line height).
+	sizePx := job.FontSize * DPI / 72 * float64(scale)
+	fallbackLineHeight := int(sizePx) * 6 / 5
+	for i, line := range job.Text {
+		lineFace, synth, err := loadStyledFace(job.Font, job.TextStyleAt(i), sizePx)
+		if err != nil {
+			return nil, err
+		}
+		// Int26_6.Ceil/Round already return whole pixels.
+		m := lineFace.Metrics()
+		ascent := m.Ascent.Ceil()
+		descent := m.Descent.Ceil()
+		lineHeight := (ascent + descent) * 6 / 5
+		if lineHeight <= 0 {
+			lineHeight = fallbackLineHeight
+		}
+		lineW := measureStyledString(lineFace, line, synth)
 		if lineW > float64(contentW) {
 			return nil, fmt.Errorf("text line too wide for media %s: %.0f px > %d px (%.2f mm > %.2f mm); use a smaller --font-size or wider media",
 				media.ID, lineW, contentW, lineW*25.4/DPI, float64(contentW)*25.4/DPI)
@@ -222,7 +225,7 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 		}
 		img.ensureH(y + lineHeight)
 		x := leftMargin + alignedX(job.Align, int(lineW), contentW)
-		drawText(img, face, x, y+ascent, line)
+		drawStyledText(img, lineFace, x, y+ascent, line, synth)
 		y += lineHeight
 	}
 	if y > topMargin {
@@ -267,7 +270,7 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 		hriH, hriW, hriAscent := 0, 0, 0
 		var hriFace font.Face
 		if job.BarcodeText {
-			hriFace, err = loadFace(job.Font, float64(MMToDots(barcodeTextHeightMM))*float64(scale))
+			hriFace, _, err = loadStyledFace(job.Font, fontStyle{}, float64(MMToDots(barcodeTextHeightMM))*float64(scale))
 			if err != nil {
 				return nil, err
 			}

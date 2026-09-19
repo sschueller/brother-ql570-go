@@ -12,6 +12,7 @@ import (
 
 	"github.com/boombuler/barcode"
 	"github.com/boombuler/barcode/code128"
+	"golang.org/x/image/font/gofont/goregular"
 )
 
 func textJob(text string, lengthMM float64) *Job {
@@ -40,6 +41,139 @@ func TestRenderText(t *testing.T) {
 	}
 	if black < 500 {
 		t.Errorf("expected text to produce ink, got %d black dots", black)
+	}
+}
+
+// TestRenderTextStyles renders a multi-line label with one line per style
+// (embedded font variants) and verifies that bold and bold-italic are
+// heavier than plain text, and italic changes the glyphs.
+func TestRenderTextStyles(t *testing.T) {
+	ink := func(style string) (int, [][]byte) {
+		t.Helper()
+		j := textJob("STYLED", 30)
+		j.TextStyles = []string{style}
+		j.DefaultJobValues()
+		media, err := j.Validate()
+		if err != nil {
+			t.Fatal(err)
+		}
+		rows, err := RenderJob(j, media)
+		if err != nil {
+			t.Fatalf("RenderJob(%s): %v", style, err)
+		}
+		n := 0
+		for _, row := range rows {
+			for _, b := range row {
+				n += popcount(b)
+			}
+		}
+		return n, rows
+	}
+
+	j := &Job{
+		Text:       []string{"NORMAL", "BOLD", "ITALIC", "BOTH"},
+		TextStyles: []string{"normal", "bold", "italic", "bold-italic"},
+		LengthMM:   60,
+	}
+	j.DefaultJobValues()
+	media, err := j.Validate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RenderJob(j, media); err != nil {
+		t.Fatalf("RenderJob mixed styles: %v", err)
+	}
+
+	plainInk, plainRows := ink("")
+	boldInk, _ := ink("bold")
+	italicInk, italicRows := ink("italic")
+	boldItalicInk, _ := ink("bold-italic")
+	if boldInk <= plainInk {
+		t.Errorf("bold ink %d should exceed plain ink %d", boldInk, plainInk)
+	}
+	if boldItalicInk <= plainInk {
+		t.Errorf("bold-italic ink %d should exceed plain ink %d", boldItalicInk, plainInk)
+	}
+	if italicInk <= 0 {
+		t.Error("italic should produce ink")
+	}
+	same := true
+	for i := range italicRows {
+		if !bytes.Equal(italicRows[i], plainRows[i]) {
+			same = false
+			break
+		}
+	}
+	if same {
+		t.Error("italic raster should differ from plain raster")
+	}
+}
+
+// TestRenderTextStylesCustomFont verifies synthetic bold/italic for a
+// custom TTF file: the styles render without error and bold is heavier.
+func TestRenderTextStylesCustomFont(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "custom.ttf")
+	if err := os.WriteFile(path, goregular.TTF, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ink := func(styles ...string) int {
+		t.Helper()
+		j := textJob("CUSTOM", 30)
+		j.Font = path
+		j.TextStyles = styles
+		j.DefaultJobValues()
+		media, err := j.Validate()
+		if err != nil {
+			t.Fatal(err)
+		}
+		rows, err := RenderJob(j, media)
+		if err != nil {
+			t.Fatalf("RenderJob custom font %v: %v", styles, err)
+		}
+		n := 0
+		for _, row := range rows {
+			for _, b := range row {
+				n += popcount(b)
+			}
+		}
+		return n
+	}
+	plain := ink("")
+	if bold := ink("bold"); bold <= plain {
+		t.Errorf("synthetic bold ink %d should exceed plain ink %d", bold, plain)
+	}
+	if italic := ink("italic"); italic <= 0 {
+		t.Error("synthetic italic should produce ink")
+	}
+	ink("bold-italic")
+}
+
+// TestRenderTextStylesMono verifies the monospace embedded family renders
+// all four styles.
+func TestRenderTextStylesMono(t *testing.T) {
+	j := &Job{
+		Font:       "go-mono",
+		Text:       []string{"rack-7", "SW-01 uplink"},
+		TextStyles: []string{"bold", "italic"},
+		LengthMM:   40,
+	}
+	j.DefaultJobValues()
+	media, err := j.Validate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := RenderJob(j, media)
+	if err != nil {
+		t.Fatalf("RenderJob go-mono: %v", err)
+	}
+	black := 0
+	for _, row := range rows {
+		for _, b := range row {
+			black += popcount(b)
+		}
+	}
+	if black < 500 {
+		t.Errorf("expected text ink, got %d black dots", black)
 	}
 }
 

@@ -145,6 +145,7 @@ input[type=text]:focus, input[type=number]:focus, select:focus, textarea:focus {
 textarea { resize: vertical; min-height: 40px; }
 .row { display: flex; align-items: center; gap: 8px; }
 .row input { flex: 1; }
+.row select { flex: 0 0 118px; }
 .row .remove {
   border: 1px solid var(--line);
   background: var(--input-bg);
@@ -356,7 +357,7 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 0 16
         <legend>Text lines (top to bottom)</legend>
         <div id="text-lines"></div>
         <button class="small" id="add-line" type="button">+ add line</button>
-        <p class="field-hint">Series: use <code>{1..10}</code> to print numbered labels — e.g. <code>SW-{01..10}</code> (text, QR and barcode all expand).</p>
+        <p class="field-hint">Series: use <code>{1..10}</code> to print numbered labels — e.g. <code>SW-{01..10}</code> (text, QR and barcode all expand). Pick a bold/italic style per line.</p>
       </fieldset>
 
       <div class="grid2">
@@ -399,13 +400,22 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 0 16
         </label>
       </fieldset>
 
-      <fieldset>
-        <legend>Font size</legend>
-        <div class="slider">
-          <input type="range" id="font-size" min="4" max="72" step="1" value="10">
-          <span class="val" id="font-size-val">10</span>
-        </div>
-      </fieldset>
+      <div class="grid2">
+        <fieldset>
+          <legend>Font</legend>
+          <select id="font">
+            <option value="go">Go</option>
+            <option value="go-mono">Go Mono</option>
+          </select>
+        </fieldset>
+        <fieldset>
+          <legend>Font size</legend>
+          <div class="slider">
+            <input type="range" id="font-size" min="4" max="72" step="1" value="10">
+            <span class="val" id="font-size-val">10</span>
+          </div>
+        </fieldset>
+      </div>
 
       <div class="grid2">
         <fieldset>
@@ -716,13 +726,29 @@ mediaSel.addEventListener("change", updateLengthField);
 lengthMM.addEventListener("input", updateVAlign);
 
 const textLines = $("text-lines");
-function addTextLine(value = "") {
+const TEXT_STYLES = [
+  ["normal", "Normal"],
+  ["bold", "Bold"],
+  ["italic", "Italic"],
+  ["bold-italic", "Bold + Italic"],
+];
+function addTextLine(value = "", style = "normal") {
   const row = document.createElement("div");
   row.className = "row";
   const input = document.createElement("input");
   input.type = "text";
   input.value = value;
   input.placeholder = "label text";
+  const styleSel = document.createElement("select");
+  styleSel.title = "line style";
+  for (const [v, label] of TEXT_STYLES) {
+    const opt = document.createElement("option");
+    opt.value = v;
+    opt.textContent = label;
+    styleSel.appendChild(opt);
+  }
+  styleSel.value = style;
+  styleSel.addEventListener("change", schedulePreview);
   const rm = document.createElement("button");
   rm.type = "button";
   rm.className = "remove";
@@ -733,6 +759,7 @@ function addTextLine(value = "") {
     schedulePreview();
   });
   row.appendChild(input);
+  row.appendChild(styleSel);
   row.appendChild(rm);
   textLines.appendChild(row);
   input.addEventListener("input", schedulePreview);
@@ -904,7 +931,7 @@ threshold.addEventListener("input", () => {
 });
 
 const simpleInputs = [
-  "media", "qr", "barcode", "barcode-text", "rotate", "margin-top", "margin-bottom",
+  "media", "qr", "barcode", "barcode-text", "rotate", "font", "margin-top", "margin-bottom",
   "margin-left", "margin-right", "fit", "trim-margins",
   "cable-factor", "copies", "cut", "cut-every", "dither", "mirror", "hires", "length-mm",
 ];
@@ -916,10 +943,18 @@ for (const id of simpleInputs) {
 // ---- job model -----------------------------------------------------------
 function currentJob() {
   const lines = [];
-  for (const input of textLines.querySelectorAll("input")) {
-    if (input.value.trim()) lines.push(input.value.trim());
+  const styles = [];
+  for (const row of textLines.querySelectorAll(".row")) {
+    const input = row.querySelector("input");
+    if (input.value.trim()) {
+      lines.push(input.value.trim());
+      const styleSel = row.querySelector("select");
+      const style = styleSel ? styleSel.value : "normal";
+      styles.push(style === "normal" ? "" : style);
+    }
   }
   const num = (id) => parseFloat($(id).value) || 0;
+  const font = $("font").value === "go" ? "" : $("font").value;
   const job = {
     media: mediaSel.value,
     text: lines,
@@ -929,6 +964,7 @@ function currentJob() {
     image: uploadedImage && uploadedImage.path ? uploadedImage.path : "",
     image_fit: $("fit").checked ? "label" : "width",
     image_trim: $("trim-margins").checked,
+    font: font,
     font_size: parseFloat(fontSize.value) || 10,
     length_mm: num("length-mm"),
     align: align,
@@ -948,6 +984,7 @@ function currentJob() {
     mirror: $("mirror").checked,
     hires: $("hires").checked,
   };
+  if (styles.length) job.text_styles = styles;
   return job;
 }
 

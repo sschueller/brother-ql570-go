@@ -71,6 +71,9 @@ Usage:
 
 print flags:
   --text "line"            text line (repeatable, printed top to bottom)
+  --text-style bold        per-line font style: normal (default), bold,
+                           italic or bold-italic (repeatable, parallel to
+                           --text)
   --qr "content"           render a QR code
   --barcode "content"      render a Code128 barcode
   --barcode-text           print the content as text below the barcode
@@ -83,7 +86,9 @@ print flags:
                            picture inside the printable area, aspect kept)
   --trim-margins           crop the white margins around the image/PDF
                            page content before scaling
-  --font file.ttf          TTF font (default: embedded Go Regular)
+  --font go                TTF file path or embedded font family: go
+                           (default), go-mono (all with real bold/italic
+                           variants; custom TTFs use synthetic bold/italic)
   --font-size 10           font size in points
   --length 40              label length in mm (continuous media; default:
                            fit to content, min 12.7 mm)
@@ -134,6 +139,14 @@ func (s *stringList) Set(v string) error {
 	return nil
 }
 
+// alignTextStyles pads or truncates the per-line styles so they line up
+// with n text lines (missing entries default to normal).
+func alignTextStyles(styles []string, n int) []string {
+	out := make([]string, n)
+	copy(out, styles)
+	return out
+}
+
 func signalContext() context.Context {
 	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	return ctx
@@ -162,7 +175,7 @@ func parseSetFlags(fs *flag.FlagSet, args []string) (map[string]bool, error) {
 
 func cmdPrint(args []string) error {
 	fs := flag.NewFlagSet("print", flag.ContinueOnError)
-	var texts stringList
+	var texts, textStyles stringList
 	var (
 		qr, barcode, image, font, media, device, align, valign, compress, jobFile, dryRun string
 		pdfFile                                                                           string
@@ -172,6 +185,7 @@ func cmdPrint(args []string) error {
 		cut, mirror, dither, hires, quality, cable, fit, trimMargins, barcodeText         bool
 	)
 	fs.Var(&texts, "text", "text line (repeatable)")
+	fs.Var(&textStyles, "text-style", "per-line font style: normal, bold, italic or bold-italic (repeatable, parallel to --text)")
 	fs.StringVar(&qr, "qr", "", "QR code content")
 	fs.StringVar(&barcode, "barcode", "", "Code128 barcode content")
 	fs.BoolVar(&barcodeText, "barcode-text", false, "print the barcode content as text below the bars (fixed 3 mm)")
@@ -215,7 +229,7 @@ func cmdPrint(args []string) error {
 	// Content flags that make no sense combined with a multi-label job
 	// file (each label carries its own options in the JSON array).
 	contentFlags := []string{
-		"text", "qr", "barcode", "barcode-text", "image", "pdf", "pdf-page", "fit", "trim-margins", "font", "font-size", "length",
+		"text", "text-style", "qr", "barcode", "barcode-text", "image", "pdf", "pdf-page", "fit", "trim-margins", "font", "font-size", "length",
 		"media", "copies", "cut", "cut-every", "mirror", "rotate",
 		"margin-top", "margin-bottom", "margin-left", "margin-right", "align", "valign", "compress", "dither",
 		"threshold", "hires", "feed-dots", "quality", "cable", "cable-factor",
@@ -253,6 +267,11 @@ func cmdPrint(args []string) error {
 		// Flags explicitly set on the command line override the job file.
 		if set["text"] {
 			job.Text = texts
+			if set["text-style"] {
+				job.TextStyles = alignTextStyles(textStyles, len(texts))
+			}
+		} else if set["text-style"] {
+			job.TextStyles = textStyles
 		}
 		if set["qr"] {
 			job.QR = qr

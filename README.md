@@ -54,6 +54,7 @@ ql570 version
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--text "line"` | - | text line, repeatable, printed top to bottom |
+| `--text-style` | normal | per-line font style, repeatable and parallel to `--text`: `normal`, `bold`, `italic` or `bold-italic` |
 | `--qr "content"` | - | render a QR code (up to 30 mm, auto version) |
 | `--barcode "content"` | - | render a Code128 barcode |
 | `--barcode-text` | false | print the barcode content as text below the bars (fixed 3 mm, unaffected by `--font-size`) |
@@ -62,7 +63,7 @@ ql570 version
 | `--pdf-page N` | - | with `--pdf`, print only page N (1-based) |
 | `--fit` | false | fit the image/PDF page onto the label: the whole picture inside the printable area with the aspect ratio kept (otherwise images are scaled to full width) |
 | `--trim-margins` | false | crop the white margins around the image/PDF page content before scaling |
-| `--font file.ttf` | embedded Go Regular | TTF font file |
+| `--font` | `go` | TTF file path or an embedded font family: `go` (default, proportional) or `go-mono` (monospace). Embedded families have real bold/italic variants; custom TTF files get synthetic bold (double strike) and italic (shear) |
 | `--font-size` | 10 | font size in points |
 | `--length` | auto-fit | label length in mm (continuous tape only; default fits the content, 12.7..1000 mm) |
 | `--cable` | false | cable wrap label: fitted length x 2.5 (wrap + overlap) |
@@ -93,6 +94,13 @@ Examples:
 # Cable label: two lines + QR, length auto-fits the content
 ql570 print --text "SW-01 uplink" --text "eth1/1 -> eth1/2" \
             --qr "https://nms.example.com/devices/sw-01"
+
+# Bold / italic per line (--text-style applies line by line, in order)
+ql570 print --text "PATCH PANEL 42" --text-style bold \
+            --text "rack-7 · eth1/1" --text-style italic --length 60
+
+# Monospace font family
+ql570 print --text "eth1/1 -> eth1/2" --font go-mono --text-style bold
 
 # Cable wrap label: auto-fitted length x 2.5 so the label wraps the cable
 ql570 print --text "eth1/1 -> eth1/2" --cable
@@ -183,6 +191,10 @@ curl -s -X POST http://localhost:9101/v1/print \
      -H 'Authorization: Bearer SECRET' \
      -H 'Content-Type: application/json' \
      -d '{"text":["SW-01 uplink"],"length_mm":40}'
+
+# Per-line bold/italic styles and the monospace embedded font:
+#   {"text":["PATCH PANEL 42","rack-7 · eth1/1"],
+#    "text_styles":["bold","italic"],"font":"go-mono"}
 ```
 
 The job schema is exactly `ql.Job` (see [job.go](pkg/ql/job.go)), so a Go
@@ -378,7 +390,8 @@ Per print job (section 3 of the reference):
 - **QL-570 has no TIFF/PackBits compression** (only QL-580N/650TD/1050/1060N
   do) — `--compress tiff` is rejected during validation.
 - **No built-in fonts, no two-color, no auto media detection** — all
-  rendering is host-side in Go (embedded Go Regular font or any TTF),
+  rendering is host-side in Go (embedded Go and Go Mono families with
+  bold/italic variants, or any TTF with synthetic bold/italic),
   converted to 1-bit at 300 dpi (threshold or Floyd-Steinberg dithering).
   Print density/contrast is controlled via `--threshold`/`--dither` because
   the reference defines no print-density command.

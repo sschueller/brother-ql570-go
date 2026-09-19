@@ -4,9 +4,13 @@
     "SW-01 uplink",
     "eth1/1 -> eth1/2"
   ],
+  "text_styles": [
+    "bold",
+    "italic"
+  ],
   "qr": "https://nms.example.com/devices/sw-01",
   "barcode": "ABC-123456",
-  "font": "",
+  "font": "go",
   "font_size": 10,
   "length_mm": 80,
   "copies": 1,

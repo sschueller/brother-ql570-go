@@ -43,6 +43,14 @@ const (
 	ImageFitLabel = "label"
 )
 
+// Per-line text font styles (TextStyles entries).
+const (
+	TextStyleNormal     = "normal"
+	TextStyleBold       = "bold"
+	TextStyleItalic     = "italic"
+	TextStyleBoldItalic = "bold-italic"
+)
+
 // Job is a fully JSON-serializable print job definition. It is the single
 // schema shared by the Go library, the CLI (--job file.json) and the HTTP
 // daemon (POST /v1/print).
@@ -52,6 +60,14 @@ type Job struct {
 
 	// Text lines to print, from top to bottom.
 	Text []string `json:"text,omitempty"`
+
+	// TextStyles lists per-line font styles, parallel to Text. Each entry
+	// is "normal" (default), "bold", "italic" or "bold-italic" (also
+	// accepts "bold,italic" / "italic bold"). Missing entries are
+	// "normal"; extra entries are ignored. The embedded font families
+	// ("go", "go-mono") have real bold/italic variants; custom TTF files
+	// use synthetic bold (double strike) and italic (shear).
+	TextStyles []string `json:"text_styles,omitempty"`
 
 	// QR renders a QR code containing this string.
 	QR string `json:"qr,omitempty"`
@@ -79,8 +95,11 @@ type Job struct {
 	// keeping the page's white margins.
 	ImageTrim bool `json:"image_trim,omitempty"`
 
-	// Font is the path to a TTF file. Empty uses the embedded Go Regular
-	// font.
+	// Font is the font to use: a TTF file path, or the name of an
+	// embedded font family ("go" default, "go-mono"). Empty uses the
+	// embedded Go Regular font. Per-line bold/italic (TextStyles) uses
+	// the family's real variants when embedded, synthetic effects for
+	// custom TTF files.
 	Font string `json:"font,omitempty"`
 
 	// FontSize is the font size in points (default 10).
@@ -266,6 +285,11 @@ func (j *Job) Validate() (Media, error) {
 	default:
 		return Media{}, fmt.Errorf("image_fit must be width or label, got %q", j.ImageFit)
 	}
+	for i, s := range j.TextStyles {
+		if _, err := parseFontStyle(s); err != nil {
+			return Media{}, fmt.Errorf("text_styles[%d]: %v", i, err)
+		}
+	}
 	switch j.Compress {
 	case CompressNone:
 	case CompressTIFF:
@@ -312,6 +336,20 @@ func (j *Job) HasText() bool {
 		}
 	}
 	return false
+}
+
+// TextStyleAt returns the parsed style of text line i (normal when no
+// style is defined for that line). Styles are validated by Validate;
+// invalid strings are treated as normal here.
+func (j *Job) TextStyleAt(i int) fontStyle {
+	if i >= len(j.TextStyles) {
+		return fontStyle{}
+	}
+	st, err := parseFontStyle(j.TextStyles[i])
+	if err != nil {
+		return fontStyle{}
+	}
+	return st
 }
 
 // ParseJobs parses a job definition from JSON. Two forms are accepted:

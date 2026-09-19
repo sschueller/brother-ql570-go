@@ -150,6 +150,8 @@ func TestJobValidateOptions(t *testing.T) {
 		{"compress tiff", func(j *Job) { j.Compress = CompressTIFF }},
 		{"threshold 101", func(j *Job) { j.Threshold = 101 }},
 		{"font size negative", func(j *Job) { j.FontSize = -1 }},
+		{"text style bogus", func(j *Job) { j.TextStyles = []string{"slanted"} }},
+		{"text style bogus later line", func(j *Job) { j.TextStyles = []string{"bold", "condensed"} }},
 		{"margin left negative", func(j *Job) { j.MarginLeftMM = -1 }},
 		{"margin right negative", func(j *Job) { j.MarginRightMM = -1 }},
 		{"margins exceed width", func(j *Job) { j.MarginLeftMM = 20; j.MarginRightMM = 20 }},
@@ -167,6 +169,7 @@ func TestJobValidateOptions(t *testing.T) {
 
 func TestJobJSON(t *testing.T) {
 	j := validJob()
+	j.TextStyles = []string{"bold", "italic"}
 	j.DefaultJobValues()
 	data, err := json.Marshal(j)
 	if err != nil {
@@ -178,6 +181,9 @@ func TestJobJSON(t *testing.T) {
 	}
 	if back.Text[0] != "hello" || back.LengthMM != 40 {
 		t.Errorf("JSON round trip: %+v", back)
+	}
+	if len(back.TextStyles) != 2 || back.TextStyles[0] != "bold" || back.TextStyles[1] != "italic" {
+		t.Errorf("JSON round trip text_styles: %+v", back.TextStyles)
 	}
 }
 
