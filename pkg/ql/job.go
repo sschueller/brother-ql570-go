@@ -49,6 +49,11 @@ type Job struct {
 	// Barcode renders a Code128 barcode containing this string.
 	Barcode string `json:"barcode,omitempty"`
 
+	// BarcodeText also prints the barcode content as human-readable text
+	// (HRI) directly below the bars, at a fixed 3 mm height independent
+	// of FontSize.
+	BarcodeText bool `json:"barcode_text,omitempty"`
+
 	// Image is the path to a PNG/JPEG image file to print.
 	Image string `json:"image,omitempty"`
 

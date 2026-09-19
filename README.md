@@ -56,6 +56,7 @@ ql570 version
 | `--text "line"` | - | text line, repeatable, printed top to bottom |
 | `--qr "content"` | - | render a QR code (up to 30 mm, auto version) |
 | `--barcode "content"` | - | render a Code128 barcode |
+| `--barcode-text` | false | print the barcode content as text below the bars (fixed 3 mm, unaffected by `--font-size`) |
 | `--image file.png` | - | print a PNG/JPEG/GIF (scaled to full width) |
 | `--pdf file.pdf` | - | print a PDF (rasterized at 300 dpi; one label per page, up to 30 pages) |
 | `--pdf-page N` | - | with `--pdf`, print only page N (1-based) |

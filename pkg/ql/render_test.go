@@ -562,6 +562,69 @@ func TestRenderBarcodeChecksumAndQuietZone(t *testing.T) {
 	}
 }
 
+// TestRenderBarcodeText checks the optional HRI: with BarcodeText the
+// content is drawn below the 10 mm bars; without it nothing is.
+func TestRenderBarcodeText(t *testing.T) {
+	const content = "ABC-123456"
+	inkBelowBars := func(withText bool) int {
+		j := &Job{Barcode: content, BarcodeText: withText, LengthMM: 40}
+		j.DefaultJobValues()
+		media, err := j.Validate()
+		if err != nil {
+			t.Fatal(err)
+		}
+		rows, err := RenderJob(j, media)
+		if err != nil {
+			t.Fatalf("RenderJob: %v", err)
+		}
+		n := 0
+		for y := MMToDots(10); y < len(rows); y++ {
+			for x := 0; x < media.PrintableWidthDots; x++ {
+				if bitAt(rows, media, media.PrintableWidthDots, x, y) {
+					n++
+				}
+			}
+		}
+		return n
+	}
+	if n := inkBelowBars(false); n != 0 {
+		t.Errorf("no text expected below the bars, found %d black dots", n)
+	}
+	if n := inkBelowBars(true); n < 200 {
+		t.Errorf("expected HRI text below the bars, found only %d black dots", n)
+	}
+}
+
+// TestRenderBarcodeTextFixedSize checks that the HRI below the bars keeps
+// its size when the job's font size changes.
+func TestRenderBarcodeTextFixedSize(t *testing.T) {
+	lowestInk := func(fontSize float64) int {
+		j := &Job{Barcode: "ABC-123456", BarcodeText: true, LengthMM: 40}
+		j.DefaultJobValues()
+		j.FontSize = fontSize
+		media, err := j.Validate()
+		if err != nil {
+			t.Fatal(err)
+		}
+		rows, err := RenderJob(j, media)
+		if err != nil {
+			t.Fatalf("RenderJob: %v", err)
+		}
+		lowest := -1
+		for y := MMToDots(10); y < len(rows); y++ {
+			for x := 0; x < media.PrintableWidthDots; x++ {
+				if bitAt(rows, media, media.PrintableWidthDots, x, y) {
+					lowest = y
+				}
+			}
+		}
+		return lowest
+	}
+	if got, want := lowestInk(40), lowestInk(10); got != want {
+		t.Errorf("HRI text bottom depends on font size: 40 pt reaches row %d, 10 pt row %d", got, want)
+	}
+}
+
 // bitAt extracts one pixel from the raster rows, undoing the right-margin
 // placement used by rasterize.
 func bitAt(rows [][]byte, media Media, width, x, y int) bool {

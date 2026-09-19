@@ -73,6 +73,8 @@ print flags:
   --text "line"            text line (repeatable, printed top to bottom)
   --qr "content"           render a QR code
   --barcode "content"      render a Code128 barcode
+  --barcode-text           print the content as text below the barcode
+                           (fixed 3 mm, unaffected by --font-size)
   --image file.png         print a PNG/JPEG/GIF image (scaled to width)
   --pdf file.pdf           print a PDF (rasterized at 300 dpi; one label
                            per page, or use --pdf-page to pick one page)
@@ -163,11 +165,12 @@ func cmdPrint(args []string) error {
 		fontSize, length, marginTop, marginBottom, cableFactor                    float64
 		marginLeft, marginRight                                                   float64
 		copies, cutEvery, rotate, threshold, feedDots, pdfPage                    int
-		cut, mirror, dither, hires, quality, cable, fit, trimMargins              bool
+		cut, mirror, dither, hires, quality, cable, fit, trimMargins, barcodeText bool
 	)
 	fs.Var(&texts, "text", "text line (repeatable)")
 	fs.StringVar(&qr, "qr", "", "QR code content")
 	fs.StringVar(&barcode, "barcode", "", "Code128 barcode content")
+	fs.BoolVar(&barcodeText, "barcode-text", false, "print the barcode content as text below the bars (fixed 3 mm)")
 	fs.StringVar(&image, "image", "", "image file (PNG/JPEG/GIF)")
 	fs.StringVar(&pdfFile, "pdf", "", "PDF file to print (one label per page)")
 	fs.IntVar(&pdfPage, "pdf-page", 0, "print only this PDF page (1-based)")
@@ -207,7 +210,7 @@ func cmdPrint(args []string) error {
 	// Content flags that make no sense combined with a multi-label job
 	// file (each label carries its own options in the JSON array).
 	contentFlags := []string{
-		"text", "qr", "barcode", "image", "pdf", "pdf-page", "fit", "trim-margins", "font", "font-size", "length",
+		"text", "qr", "barcode", "barcode-text", "image", "pdf", "pdf-page", "fit", "trim-margins", "font", "font-size", "length",
 		"media", "copies", "cut", "cut-every", "mirror", "rotate",
 		"margin-top", "margin-bottom", "margin-left", "margin-right", "align", "compress", "dither",
 		"threshold", "hires", "feed-dots", "quality", "cable", "cable-factor",
@@ -251,6 +254,9 @@ func cmdPrint(args []string) error {
 		}
 		if set["barcode"] {
 			job.Barcode = barcode
+		}
+		if set["barcode-text"] {
+			job.BarcodeText = barcodeText
 		}
 		if set["image"] {
 			job.Image = image

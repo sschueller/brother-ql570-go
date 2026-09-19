@@ -191,7 +191,7 @@ func TestParseJobsArray(t *testing.T) {
 	data := []byte(`[
 		{"text":["SW-01"],"length_mm":30},
 		{"text":["SW-02"],"length_mm":30},
-		{"barcode":"ABC123","length_mm":40}
+		{"barcode":"ABC123","barcode_text":true,"length_mm":40}
 	]`)
 	jobs, err := ParseJobs(data)
 	if err != nil {
@@ -200,7 +200,7 @@ func TestParseJobsArray(t *testing.T) {
 	if len(jobs) != 3 {
 		t.Fatalf("got %d jobs, want 3", len(jobs))
 	}
-	if jobs[1].Text[0] != "SW-02" || jobs[2].Barcode != "ABC123" {
+	if jobs[1].Text[0] != "SW-02" || jobs[2].Barcode != "ABC123" || !jobs[2].BarcodeText {
 		t.Errorf("unexpected jobs: %+v", jobs)
 	}
 }

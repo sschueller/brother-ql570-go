@@ -17,11 +17,16 @@ import (
 	"github.com/boombuler/barcode/code128"
 	"github.com/skip2/go-qrcode"
 	"golang.org/x/image/draw"
+	"golang.org/x/image/font"
 )
 
 // code128QuietModules is the minimum quiet zone required on each side of a
 // Code 128 symbol, in module widths (ISO/IEC 15417 requires at least 10).
 const code128QuietModules = 10
+
+// barcodeTextHeightMM is the fixed height of the human-readable text
+// (HRI) drawn below a barcode, independent of the job's font size.
+const barcodeTextHeightMM = 3.0
 
 // canvas is a grayscale image with the native image.Gray convention:
 // 0 = black, 255 = white.
@@ -257,10 +262,28 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 			return nil, fmt.Errorf("encoding Code128 barcode: %w", err)
 		}
 		barH := MMToDots(10) * scale
-		if y+barH > ch-bottomMargin {
-			return nil, overflowErr("the barcode", barH)
+		// Optional human-readable interpretation (HRI) below the bars, at
+		// a fixed physical size independent of the job's font size.
+		hriH, hriW, hriAscent := 0, 0, 0
+		var hriFace font.Face
+		if job.BarcodeText {
+			hriFace, err = loadFace(job.Font, float64(MMToDots(barcodeTextHeightMM))*float64(scale))
+			if err != nil {
+				return nil, err
+			}
+			m := hriFace.Metrics()
+			hriAscent = m.Ascent.Ceil()
+			hriH = (hriAscent + m.Descent.Ceil()) * 6 / 5
+			hriW = int(measureString(hriFace, job.Barcode))
 		}
-		img.ensureH(y + barH)
+		need := barH + hriH
+		if hriH > 0 {
+			need += 2 * scale
+		}
+		if y+need > ch-bottomMargin {
+			return nil, overflowErr("the barcode", need)
+		}
+		img.ensureH(y + need)
 		// Reserve a quiet zone of at least 10 module widths on each side
 		// (the spec minimum) and scale the symbol into the remainder, so
 		// the bars do not run edge to edge.
@@ -277,7 +300,10 @@ func renderJobToCanvas(job *Job, media Media) (*canvas, error) {
 			return nil, fmt.Errorf("scaling barcode: %w", err)
 		}
 		drawBinary(img, scaled, x, y)
-		y += barH + gap
+		if hriH > 0 {
+			drawText(img, hriFace, x+(barW-hriW)/2, y+barH+2*scale+hriAscent, job.Barcode)
+		}
+		y += need + gap
 	}
 
 	if job.Image != "" {

@@ -366,6 +366,11 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 0 16
         <fieldset>
           <legend>Barcode (Code128)</legend>
           <input type="text" id="barcode" placeholder="ABC-1234">
+          <label class="checkline">
+            <input type="checkbox" id="barcode-text">
+            print content as text below
+            <span class="hint">fixed 3 mm, independent of font size</span>
+          </label>
         </fieldset>
       </div>
 
@@ -871,7 +876,7 @@ threshold.addEventListener("input", () => {
 });
 
 const simpleInputs = [
-  "media", "qr", "barcode", "rotate", "margin-top", "margin-bottom",
+  "media", "qr", "barcode", "barcode-text", "rotate", "margin-top", "margin-bottom",
   "margin-left", "margin-right", "fit", "trim-margins",
   "cable-factor", "copies", "cut", "cut-every", "dither", "mirror", "hires", "length-mm",
 ];
@@ -892,6 +897,7 @@ function currentJob() {
     text: lines,
     qr: $("qr").value.trim(),
     barcode: $("barcode").value.trim(),
+    barcode_text: $("barcode-text").checked,
     image: uploadedImage && uploadedImage.path ? uploadedImage.path : "",
     image_fit: $("fit").checked ? "label" : "width",
     image_trim: $("trim-margins").checked,
