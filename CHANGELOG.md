@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/sschueller/brother-ql570-go/compare/v0.7.0...v0.8.0) (2026-09-19)
+
+
+### Features
+
+* **font:** add per-line bold/italic text styles ([6bb2fe1](https://github.com/sschueller/brother-ql570-go/commit/6bb2fe1e3b633a15e099474a08e667f6d3e32025))
+
 ## [0.7.0](https://github.com/sschueller/brother-ql570-go/compare/v0.6.1...v0.7.0) (2026-09-19)
 
 
