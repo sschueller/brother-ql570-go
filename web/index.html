@@ -346,6 +346,12 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 0 16
       </fieldset>
 
       <fieldset>
+        <legend>Label length (mm)</legend>
+        <input type="number" id="length-mm" min="12.7" max="1000" step="0.1" placeholder="auto — fit content">
+        <p class="field-hint">Continuous tape only: leave empty to fit the content, or set a fixed length so every label is the same size (12.7–1000 mm).</p>
+      </fieldset>
+
+      <fieldset>
         <legend>Text lines (top to bottom)</legend>
         <div id="text-lines"></div>
         <button class="small" id="add-line" type="button">+ add line</button>
@@ -668,6 +674,7 @@ function maybeMatchMedia(st) {
   if (m) {
     mediaSel.value = m.id;
     mediaSel.dataset.matched = "1";
+    updateLengthField();
     schedulePreview();
   }
 }
@@ -681,6 +688,14 @@ for (const m of MEDIA) {
   mediaSel.appendChild(opt);
 }
 mediaSel.value = "29";
+
+const lengthMM = $("length-mm");
+function updateLengthField() {
+  const continuous = /^\d+$/.test(mediaSel.value);
+  lengthMM.disabled = !continuous;
+  if (!continuous) lengthMM.value = "";
+}
+mediaSel.addEventListener("change", updateLengthField);
 
 const textLines = $("text-lines");
 function addTextLine(value = "") {
@@ -858,7 +873,7 @@ threshold.addEventListener("input", () => {
 const simpleInputs = [
   "media", "qr", "barcode", "rotate", "margin-top", "margin-bottom",
   "margin-left", "margin-right", "fit", "trim-margins",
-  "cable-factor", "copies", "cut", "cut-every", "dither", "mirror", "hires",
+  "cable-factor", "copies", "cut", "cut-every", "dither", "mirror", "hires", "length-mm",
 ];
 for (const id of simpleInputs) {
   $(id).addEventListener("input", schedulePreview);
@@ -881,6 +896,7 @@ function currentJob() {
     image_fit: $("fit").checked ? "label" : "width",
     image_trim: $("trim-margins").checked,
     font_size: parseFloat(fontSize.value) || 10,
+    length_mm: num("length-mm"),
     align: align,
     rotate: parseInt($("rotate").value, 10) || 0,
     margin_top_mm: num("margin-top"),

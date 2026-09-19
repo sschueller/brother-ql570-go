@@ -145,6 +145,11 @@ ql570 serve --listen 0.0.0.0:9101 [--token SECRET] [--device /dev/usb/lp0]
 
 Then open `http://<host>:9101` in a browser.
 
+On continuous tape the web UI's "Label length (mm)" field fixes the label
+length (every label is the same size regardless of the content); leave it
+empty to auto-fit the content. It is disabled for die-cut media, whose
+length is fixed by the label itself.
+
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--listen` | `0.0.0.0:9101` | listen address (the web UI is served at `/`) |
