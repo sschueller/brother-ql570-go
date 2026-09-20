@@ -15,6 +15,16 @@
 # The container starts even when the printer is switched off or unplugged;
 # it reconnects every 10 seconds and reports "printer not connected" until
 # then.
+#
+# mDNS caveat: multicast does not cross Docker's default bridge, so Android
+# will not auto-discover the printer with this configuration. For driverless
+# IPP discovery, run with host networking instead (replaces the ports
+# mapping):
+#
+#     network_mode: host
+#
+# IPP clients that connect directly (ipp://<host-ip>:9101/ipp/print) work
+# either way.
 
 services:
   ql570:

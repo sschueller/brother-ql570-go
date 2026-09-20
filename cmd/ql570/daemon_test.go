@@ -8,6 +8,7 @@ import (
 	"image/png"
 	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -54,7 +55,7 @@ func cannedStatus() []byte {
 func newTestMux(token string) http.Handler {
 	pp := newPrinterPool("")
 	pp.p = ql.NewPrinter(&fakeBackend{status: cannedStatus()})
-	return withCORS(newServeMux(pp, token))
+	return withCORS(newServeMux(pp, token, nil))
 }
 
 func newTestPool(b *fakeBackend) *printerPool {
@@ -370,7 +371,7 @@ func TestCORSPreflight(t *testing.T) {
 // printer-independent endpoints while no printer is connected, and that
 // printer-dependent endpoints report 503.
 func TestPrinterDisconnected(t *testing.T) {
-	h := withCORS(newServeMux(newTestPool(nil), ""))
+	h := withCORS(newServeMux(newTestPool(nil), "", nil))
 
 	rec := doJSON(t, h, "GET", "/", "", nil)
 	if rec.Code != http.StatusOK {
@@ -406,12 +407,40 @@ func TestPrinterDisconnected(t *testing.T) {
 // reopen it.
 func TestStatusFailureInvalidatesConnection(t *testing.T) {
 	pp := newTestPool(&fakeBackend{}) // empty status: reads time out
-	h := withCORS(newServeMux(pp, ""))
+	h := withCORS(newServeMux(pp, "", nil))
 	rec := doJSON(t, h, "GET", "/v1/status", "", nil)
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status: HTTP %d, want 503", rec.Code)
 	}
 	if pp.get() != nil {
 		t.Error("failed status read should invalidate the printer connection")
+	}
+}
+
+func TestIsRealInterface(t *testing.T) {
+	cases := []struct {
+		name     string
+		flags    net.Flags
+		wantReal bool
+	}{
+		{"eth0", net.FlagUp | net.FlagMulticast, true},
+		{"wlan0", net.FlagUp | net.FlagMulticast, true},
+		{"enp4s0f0", net.FlagUp | net.FlagMulticast, true},
+		{"lo", net.FlagUp | net.FlagMulticast | net.FlagLoopback, false},
+		{"docker0", net.FlagUp | net.FlagMulticast, false},
+		{"br-8a4f725b8e68", net.FlagUp | net.FlagMulticast, false},
+		{"veth4338bbe", net.FlagUp | net.FlagMulticast, false},
+		{"virbr0", net.FlagUp | net.FlagMulticast, false},
+		{"tailscale0", net.FlagUp | net.FlagMulticast, false},
+		{"wg0", net.FlagUp | net.FlagMulticast, false},
+		{"tun0", net.FlagUp | net.FlagMulticast, false},
+		{"eth0-down", 0, false},
+		{"eth0-nomc", net.FlagUp, false},
+	}
+	for _, c := range cases {
+		got := isRealInterface(net.Interface{Name: c.name, Flags: c.flags})
+		if got != c.wantReal {
+			t.Errorf("isRealInterface(%q, %v) = %v, want %v", c.name, c.flags, got, c.wantReal)
+		}
 	}
 }

@@ -107,6 +107,16 @@ func LookupMedia(id string) (Media, error) {
 	return Media{}, fmt.Errorf("unknown media %q (supported: %s)", id, strings.Join(MediaIDs(), ", "))
 }
 
+// MediaCatalog returns a copy of the full media catalog (every entry in
+// mediaTable). Callers that need to enumerate media without knowing the
+// table layout (e.g. the IPP print server building its media-col-database)
+// use this instead of MediaIDs, which only returns identifiers.
+func MediaCatalog() []Media {
+	out := make([]Media, len(mediaTable))
+	copy(out, mediaTable)
+	return out
+}
+
 // MediaIDs returns all supported media identifiers, sorted.
 func MediaIDs() []string {
 	ids := make([]string, 0, len(mediaTable))

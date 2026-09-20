@@ -127,6 +127,14 @@ serve flags:
   --token SECRET          require "Authorization: Bearer SECRET" on /v1/*
                           (default: $QL570_TOKEN)
   --device /dev/usb/lp0   printer device (default: auto-discover)
+  --ipp=true              serve IPP at /ipp/print for driverless printing
+                          (Android Default Print Service; set false to
+                          disable)
+  --ipp-name "..."        printer name advertised over mDNS/IPP (default:
+                          "Brother QL-570 @ <hostname>")
+  --ipp-hires=true        print IPP jobs at 600 dpi along the label
+                          length (high-resolution mode; set false for
+                          faster printing at 300 dpi)
 `)
 }
 

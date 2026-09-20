@@ -12,9 +12,11 @@ import (
 	"image/png"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +26,9 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 
+	"github.com/google/uuid"
+	"github.com/grandcat/zeroconf"
+	"github.com/sschueller/brother-ql570-go/pkg/ipp"
 	"github.com/sschueller/brother-ql570-go/pkg/pdf"
 	"github.com/sschueller/brother-ql570-go/pkg/ql"
 	"github.com/sschueller/brother-ql570-go/web"
@@ -47,6 +52,9 @@ func cmdServe(args []string) error {
 	listen := fs.String("listen", "0.0.0.0:9101", "listen address")
 	token := fs.String("token", os.Getenv("QL570_TOKEN"), "require Authorization: Bearer <token> on /v1/* (default: $QL570_TOKEN)")
 	device := fs.String("device", "", "printer device path")
+	ippEnabled := fs.Bool("ipp", true, "serve IPP at /ipp/print for driverless printing (Android Default Print Service)")
+	ippName := fs.String("ipp-name", "", "printer name advertised over mDNS/IPP (default \"Brother QL-570 @ <hostname>\")")
+	ippHires := fs.Bool("ipp-hires", true, "print IPP jobs at 600 dpi along the label length (high-resolution mode)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -60,14 +68,37 @@ func cmdServe(args []string) error {
 	go pool.retryLoop(ctx)
 	defer pool.Close()
 
-	srv := &http.Server{Addr: *listen, Handler: withCORS(newServeMux(pool, *token))}
+	var ippHandler http.Handler
+	var mdnsServers []*zeroconf.Server
+	defer func() {
+		for _, s := range mdnsServers {
+			s.Shutdown()
+		}
+	}()
+	if *ippEnabled {
+		if *ippName == "" {
+			host, err := os.Hostname()
+			if err != nil || host == "" {
+				host = "ql570"
+			}
+			*ippName = fmt.Sprintf("Brother QL-570 @ %s", host)
+		}
+		ippSrv := ipp.NewServer(poolAdapter{pool: pool}, *ippName, printerUUID())
+		ippSrv.Logf = log.Printf
+		ippSrv.Hires = *ippHires
+		ipp.Logf = log.Printf
+		ippHandler = ippSrv.Handler()
+		mdnsServers = registerMDNS(*ippName, ippPort(*listen), ippListenHost(*listen), printerUUID())
+	}
+
+	srv := &http.Server{Addr: *listen, Handler: withCORS(newServeMux(pool, *token, ippHandler))}
 	if pool.get() == nil {
 		log.Printf("printer not connected; the UI and API stay available and the connection is retried every %s", reconnectInterval)
 	}
 	// Warm the PDF engine in the background: the first PDF upload would
 	// otherwise pay the one-time WebAssembly compile cost, which takes
 	// tens of seconds on small ARM boards (and could outlast a reverse
-	// proxy's read timeout).
+	// proxy's read timeout). IPP PDF jobs benefit from the same warm-up.
 	go func() {
 		if err := pdf.Init(); err != nil {
 			log.Printf("PDF engine failed to initialize: %v (PDF uploads will fail)", err)
@@ -78,6 +109,234 @@ func cmdServe(args []string) error {
 	log.Printf("ql570 %s daemon listening on %s", Version, *listen)
 	fmt.Fprintf(os.Stderr, "ql570 %s daemon listening on %s\n", Version, *listen)
 	return srv.ListenAndServe()
+}
+
+// poolAdapter adapts the daemon's lazy printer pool to the ipp.Printer
+// interface. A missing printer fails fast (no USB I/O); transport-level
+// failures invalidate the connection so the retry loop reopens it.
+type poolAdapter struct {
+	pool *printerPool
+}
+
+func (a poolAdapter) PrintJobs(ctx context.Context, jobs []ql.Job) (*ql.PrintResult, error) {
+	p := a.pool.get()
+	if p == nil {
+		return nil, fmt.Errorf("printer not connected")
+	}
+	res, err := p.PrintJobs(ctx, jobs)
+	if err != nil && strings.Contains(err.Error(), "printer") {
+		a.pool.invalidate()
+	}
+	return res, err
+}
+
+func (a poolAdapter) Status(ctx context.Context) (*ql.Status, error) {
+	p := a.pool.get()
+	if p == nil {
+		return nil, fmt.Errorf("printer not connected")
+	}
+	return p.Status(ctx)
+}
+
+// printerUUID returns a stable printer UUID for this host (a UUIDv5 derived
+// from the hostname), so clients recognize the printer across restarts.
+// The "/v2" seed distinguishes the current capabilities format: bumping it
+// makes clients drop capabilities they cached from older daemon versions.
+func printerUUID() string {
+	host, err := os.Hostname()
+	if err != nil || host == "" {
+		host = "ql570"
+	}
+	return uuid.NewSHA1(uuid.NameSpaceDNS, []byte("brother-ql570-go/v2@"+host)).URN()
+}
+
+// ippPort extracts the TCP port from a listen address (e.g. "0.0.0.0:9101").
+func ippPort(listen string) int {
+	_, port, err := net.SplitHostPort(listen)
+	if err != nil {
+		return 9101
+	}
+	n, err := strconv.Atoi(port)
+	if err != nil || n <= 0 {
+		return 9101
+	}
+	return n
+}
+
+// ippListenHost extracts the bind host from a listen address.
+func ippListenHost(listen string) string {
+	host, _, err := net.SplitHostPort(listen)
+	if err != nil {
+		return ""
+	}
+	return host
+}
+
+// isRealInterface reports whether an interface should carry mDNS traffic:
+// up, multicast-capable, non-loopback and not virtual (Docker bridges,
+// veth pairs, VPNs, ...). Announcing on virtual interfaces makes clients
+// receive IP addresses they cannot reach (e.g. Docker bridge networks),
+// which stalls discovery on the phone and, through the shared print
+// service queue, affects the other printers as well.
+func isRealInterface(iface net.Interface) bool {
+	if iface.Flags&net.FlagUp == 0 ||
+		iface.Flags&net.FlagMulticast == 0 ||
+		iface.Flags&net.FlagLoopback != 0 {
+		return false
+	}
+	name := strings.ToLower(iface.Name)
+	for _, prefix := range []string{
+		"docker", "br-", "veth", "virbr", "vmnet",
+		"tun", "tap", "tailscale", "wg", "flannel", "cali", "cni", "kube",
+	} {
+		if strings.HasPrefix(name, prefix) {
+			return false
+		}
+	}
+	return true
+}
+
+// realInterfaces returns the interfaces worth announcing mDNS on.
+func realInterfaces() []net.Interface {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+	var out []net.Interface
+	for _, iface := range ifaces {
+		if isRealInterface(iface) {
+			out = append(out, iface)
+		}
+	}
+	return out
+}
+
+// defaultRouteInterface returns the interface used to reach the outside
+// world (via a connectionless UDP dial, which routes without sending
+// packets), or nil when it cannot be determined.
+func defaultRouteInterface() *net.Interface {
+	conn, err := net.Dial("udp", "8.8.8.8:53")
+	if err != nil {
+		return nil
+	}
+	defer conn.Close()
+	local, ok := conn.LocalAddr().(*net.UDPAddr)
+	if !ok || local.IP == nil {
+		return nil
+	}
+	for _, iface := range realInterfaces() {
+		for _, a := range interfaceAddrs(&iface) {
+			if a.IP.Equal(local.IP) {
+				return &iface
+			}
+		}
+	}
+	return nil
+}
+
+// interfaceAddrs returns the IPv4/IPv6 addresses assigned to an interface.
+func interfaceAddrs(iface *net.Interface) []*net.IPNet {
+	addrs, err := iface.Addrs()
+	if err != nil {
+		return nil
+	}
+	var out []*net.IPNet
+	for _, a := range addrs {
+		if ipn, ok := a.(*net.IPNet); ok && !ipn.IP.IsUnspecified() {
+			out = append(out, ipn)
+		}
+	}
+	return out
+}
+
+// mdnsTarget picks the single interface (and its addresses) the printer
+// is announced on: the interface owning an explicit --listen IP, else the
+// default-route interface, else all real interfaces. Announcements carry
+// only that interface's addresses, so clients never receive unreachable
+// Docker/VPN addresses.
+func mdnsTarget(listenHost string) ([]net.Interface, []string) {
+	ifaces := realInterfaces()
+	if len(ifaces) == 0 {
+		return nil, nil
+	}
+	ipStrings := func(iface *net.Interface) []string {
+		var out []string
+		for _, a := range interfaceAddrs(iface) {
+			out = append(out, a.IP.String())
+		}
+		return out
+	}
+	if h := net.ParseIP(listenHost); h != nil && !h.IsUnspecified() {
+		for _, iface := range ifaces {
+			for _, a := range interfaceAddrs(&iface) {
+				if a.IP.Equal(h) {
+					return []net.Interface{iface}, ipStrings(&iface)
+				}
+			}
+		}
+	}
+	if iface := defaultRouteInterface(); iface != nil {
+		return []net.Interface{*iface}, ipStrings(iface)
+	}
+	var ips []string
+	for _, iface := range ifaces {
+		ips = append(ips, ipStrings(&iface)...)
+	}
+	return ifaces, ips
+}
+
+// registerMDNS advertises the IPP service via mDNS/DNS-SD so Android's
+// Default Print Service discovers the printer without configuration. It
+// registers the standard _ipp._tcp service type that every IPP Everywhere
+// client browses; the announcement is limited to one real network
+// interface (and only its addresses). Failures are logged and non-fatal
+// (IPP stays reachable by direct URL).
+//
+// _printer._tcp and the Mopria _universal._sub._ipp._tcp subtype were
+// deliberately dropped: _printer._tcp is a legacy type clients do not
+// need for IPP, and advertising the subtype as a separate service type
+// pollutes the _services._dns-sd._udp.local enumeration (a DNS-SD
+// violation) and multiplies mDNS traffic on multi-homed hosts.
+func registerMDNS(name string, port int, listenHost, printerUUIDStr string) []*zeroconf.Server {
+	// The UUID key lets clients track the printer identity across
+	// address changes and, crucially, invalidate capabilities they
+	// cached from a previous daemon version (Android's built-in print
+	// service caches printer capabilities indefinitely, keyed by UUID).
+	rawUUID := strings.TrimPrefix(printerUUIDStr, "urn:uuid:")
+	txt := []string{
+		"txtvers=1",
+		"qtotal=1",
+		"rp=ipp/print",
+		"ty=" + name,
+		"product=(Brother QL-570)",
+		"pdl=image/pwg-raster,application/pdf",
+		"UUID=" + rawUUID,
+	}
+	ifaces, ips := mdnsTarget(listenHost)
+
+	var (
+		s   *zeroconf.Server
+		err error
+	)
+	if len(ifaces) > 0 && len(ips) > 0 {
+		host, herr := os.Hostname()
+		if herr != nil || host == "" {
+			host = "ql570"
+		}
+		s, err = zeroconf.RegisterProxy(name, "_ipp._tcp", "local.", port, host, ips, txt, ifaces)
+	} else {
+		s, err = zeroconf.Register(name, "_ipp._tcp", "local.", port, txt, nil)
+	}
+	if err != nil {
+		log.Printf("mDNS: registering _ipp._tcp: %v", err)
+		return nil
+	}
+	names := make([]string, 0, len(ifaces))
+	for _, iface := range ifaces {
+		names = append(names, iface.Name)
+	}
+	log.Printf("mDNS: advertising %q on port %d via %v (addresses %v)", name, port, names, ips)
+	return []*zeroconf.Server{s}
 }
 
 // reconnectInterval is how often the daemon retries the printer connection
@@ -157,13 +416,21 @@ func (pp *printerPool) retryLoop(ctx context.Context) {
 }
 
 // newServeMux builds the HTTP routes for the daemon: the embedded web UI
-// at /, the API under /v1/* and the liveness probe at /healthz.
-func newServeMux(pool *printerPool, token string) *http.ServeMux {
+// at /, the API under /v1/*, the IPP print service at /ipp/print (when
+// ippHandler is non-nil) and the liveness probe at /healthz.
+func newServeMux(pool *printerPool, token string, ippHandler http.Handler) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 	auth := newAuth(token)
+
+	if ippHandler != nil {
+		// Driverless printing: unauthenticated by design (LAN trust
+		// model, like any consumer printer). --token only protects
+		// /v1/* and the web UI.
+		mux.Handle("POST /ipp/print", ippHandler)
+	}
 
 	mux.Handle("GET /v1/status", auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := pool.get()

@@ -9,8 +9,11 @@ straight to the device.
 Also ships an HTTP print daemon with an **embedded web UI** (label designer
 with live preview, image and PDF upload, printer status and print), so any
 client — including the cross-compiled macOS ARM binary — can print labels
-over the network. A Docker image and compose file are included for
-Raspberry Pi (ARM64) deployment.
+over the network. The daemon also speaks **IPP Everywhere** and advertises
+itself via mDNS, so Android phones print driverless with the built-in
+Default Print Service (see [HTTP daemon → Android](#android-driverless-ipp-printing)).
+A Docker image and compose file are included for Raspberry Pi (ARM64)
+deployment.
 
 - [Quick start](#quick-start)
 - [CLI](#cli)
@@ -165,6 +168,9 @@ length is fixed by the label itself.
 | `--listen` | `0.0.0.0:9101` | listen address (the web UI is served at `/`) |
 | `--token` | `$QL570_TOKEN` | require `Authorization: Bearer <token>` on `/v1/*` |
 | `--device` | auto | printer device path (auto-discovers `/dev/usb/lp*`) |
+| `--ipp` | `true` | serve IPP at `/ipp/print` for driverless printing (see below) |
+| `--ipp-name` | `Brother QL-570 @ <hostname>` | printer name advertised via mDNS/IPP |
+| `--ipp-hires` | `true` | print IPP jobs at 600 dpi along the label length (high-resolution mode; set false for 300 dpi) |
 
 The daemon starts even when the printer is switched off or unplugged: the
 UI, `/v1/preview` and `/v1/upload` work without it, `/v1/status`,
@@ -181,10 +187,13 @@ default comes from `$QL570_TOKEN`.
 | `/v1/upload` | POST | multipart `file` (PNG/JPEG/GIF **or PDF**) | stores the image and returns `{"path": "..."}`; PDFs are rasterized page by page (max 30) and return `{"type": "pdf", "pages": N, "paths": [...]}` — one PNG path per page, usable as the job's `image` field |
 | `/v1/status` | GET | - | current printer status |
 | `/v1/info` | GET | - | model + media info |
+| `/ipp/print` | POST | IPP message + document | IPP print service (RFC 8010/8011) for driverless printing — no auth by design |
 | `/healthz` | GET | - | liveness probe (no auth) |
 
 With `--token` set, `/v1/*` requires `Authorization: Bearer <token>` (the
-web UI asks for the token in the header field).
+web UI asks for the token in the header field). `/ipp/print` is
+deliberately unauthenticated, like any consumer printer: it trusts the
+local network.
 
 ```sh
 curl -s -X POST http://localhost:9101/v1/print \
@@ -201,6 +210,66 @@ The job schema is exactly `ql.Job` (see [job.go](pkg/ql/job.go)), so a Go
 application can share struct definitions with the library. The body may be
 a single job object or an array of jobs — one label per entry, printed as
 pages of a single job. All entries must use the same media.
+
+### Android (driverless IPP printing)
+
+`ql570 serve` also speaks **IPP Everywhere** (RFC 8010/8011) and advertises
+itself via mDNS/Bonjour, so Android phones can print with **zero apps and
+zero drivers** using the built-in Default Print Service:
+
+1. On the phone, make sure the Default Print Service is enabled:
+   **Settings → Connected devices → Printing → Default Print Service**.
+   The phone must be on the **same Wi-Fi network** as the daemon host
+   (mDNS is link-local; a guest network or AP isolation hides the printer).
+2. Open something printable (photo, note, PDF) → **Print** → select
+   **"Brother QL-570 @ \<hostname\>"**.
+3. Pick a paper size in the print dialog. Android only offers sizes from
+   its fixed table of standard sizes, so the daemon advertises four
+   label-appropriate standard sizes — 54x86 mm card, 4x6 in, 3.5x5 in and
+   5x7 in photo. On continuous tape each print uses an auto-fit label
+   length, so the chosen size's aspect ratio (and the portrait/landscape
+   choice) changes the printed label; on die-cut labels the loaded label
+   is used as-is. The document scales to fit. (Exact die-cut sizes and
+   tape lengths stay selectable from the web UI / API.)
+4. Print. One document page = one label. The printer must have matching
+   media loaded (die-cut vs continuous, width, and for die-cut also the
+   length) — a mismatch is rejected before anything prints.
+
+Details:
+
+- Documents arrive as **`image/pwg-raster`** (PWG 5102.4, decoded in pure
+  Go) or **`application/pdf`** (rasterized with the embedded PDF engine);
+  both become grayscale label jobs on the normal USB path. IPP jobs print
+  in the QL-570's high-resolution mode by default (600 dpi along the
+  label length; `--ipp-hires=false` for faster 300 dpi printing).
+- The daemon advertises the standard `_ipp._tcp` service that every IPP
+  Everywhere client (Android, iOS, Windows, macOS) browses. The
+  announcement is limited to one real network interface — the interface
+  owning an explicit `--listen` IP, otherwise the default-route interface —
+  and carries only that interface's addresses. This matters on
+  multi-homed hosts (Docker, VPNs): announcing on bridge interfaces or
+  their addresses makes phones try unreachable IPs, which stalls
+  Android's print service and takes the other network printers down with
+  it.
+- Print jobs are serialized: the USB path never interleaves two jobs.
+  While the printer is off or unplugged, IPP reports
+  `server-error-service-unavailable` and the printer shows as offline.
+- Other IPP Everywhere clients work too, without mDNS: add the printer
+  manually on Windows/macOS as `ipp://<host>:9101/ipp/print`.
+- `--ipp=false` disables IPP + mDNS entirely. `--ipp-name` changes the
+  advertised name.
+- The `--token` only protects `/v1/*` and the web UI; IPP is
+  unauthenticated by design (LAN trust model, like any consumer printer).
+
+Troubleshooting: if the printer does not appear on the phone, check with
+`avahi-browse -rt _ipp._tcp` on the daemon host that the service and its
+TXT records are visible, and that phone and host share a subnet. If the
+phone shows stale paper sizes after an update, toggle the Default Print
+Service off and on (Settings → Connected devices → Printing) to drop its
+cached printer capabilities. If other network printers misbehave while
+the daemon runs, stop all old daemon processes (`pkill ql570`) — a
+leftover instance from before this fix keeps announcing on every
+interface until its records expire.
 
 ### Series labels
 
@@ -289,6 +358,22 @@ Open `http://<host-ip>:9101` in a browser. Like the native daemon, the
 container starts without the printer connected and reconnects every 10
 seconds; the daemon auto-discovers `/dev/usb/lp*` inside the container
 when the USB bus is mapped.
+
+**mDNS caveat**: multicast does not cross Docker's default bridge, so
+Android will not auto-discover a containerized daemon. For driverless
+printing from a container, run it with host networking (which also takes
+over the port mapping):
+
+```sh
+docker run --rm -d --name ql570 \
+  --network host \
+  --device=/dev/bus/usb \
+  ql570
+```
+
+Without host networking, the IPP service still works for clients that
+connect directly: add the printer manually as `ipp://<host-ip>:9101/ipp/print`
+(Windows, macOS, …) — only the zero-config mDNS discovery is lost.
 
 ## Library usage
 
