@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/sschueller/brother-ql570-go/compare/v0.8.0...v0.9.0) (2026-09-20)
+
+
+### Features
+
+* **ipp:** add driverless IPP print server ([e526bc0](https://github.com/sschueller/brother-ql570-go/commit/e526bc0466ac81db296013b50b57dc45e8e6d6ec))
+
 ## [0.8.0](https://github.com/sschueller/brother-ql570-go/compare/v0.7.0...v0.8.0) (2026-09-19)
 
 
