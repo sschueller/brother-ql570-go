@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/sschueller/brother-ql570-go/compare/v0.9.0...v0.10.0) (2026-09-20)
+
+
+### Features
+
+* **ql:** configure device settings via `ql570 config` ([113c691](https://github.com/sschueller/brother-ql570-go/commit/113c69159084e443f6d88ff197cb92b47fa2ec98))
+
 ## [0.9.0](https://github.com/sschueller/brother-ql570-go/compare/v0.8.0...v0.9.0) (2026-09-20)
 
 
