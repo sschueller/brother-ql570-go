@@ -45,9 +45,10 @@ labels, see below).
 ## CLI
 
 ```
-ql570 print [flags]
+ql570 print  [flags]
 ql570 status [--device PATH]
 ql570 info   [--device PATH]
+ql570 config [flags]
 ql570 serve  [flags]
 ql570 version
 ```
@@ -144,6 +145,27 @@ Decode the 32-byte status response: model, media type/width/length, status
 type, phase, notification and error bits. `info` additionally notes that the
 QL-570 raster protocol does not expose the firmware version or serial number
 (no such command exists in the official command reference).
+
+### config
+
+Change the device settings that are stored in the printer's non-volatile
+memory (they survive power cycles). Running `ql570 config` without flags
+lists the supported options. These commands are not in the official command
+reference: they were reverse-engineered from Brother's Printer Setting Tool
+and there is **no command to read the current values back** (write-only).
+
+| Flag | Values | Description |
+|------|--------|-------------|
+| `--power-off` | `0`, `10`, `20`, `30`, `40`, `50`, `60` | auto power off after this many idle minutes; `0` disables it (Brother default: 60) |
+| `--power-on` | `true`, `false` | auto power on when the power cord is plugged in (default: off) |
+
+```sh
+# The QL-570 turns itself off after 60 idle minutes by default; disable it
+ql570 config --power-off 0
+
+# Or shorten it to 30 minutes and turn on with the power cord
+ql570 config --power-off 30 --power-on=true
+```
 
 ## HTTP daemon
 
@@ -403,6 +425,8 @@ Useful library entry points:
 - `(*ql.Printer).Print(ctx, *Job)` — print one label (thin wrapper over PrintJobs)
 - `(*ql.Printer).PrintJobs(ctx, []Job)` — print a batch of labels as one job
 - `(*ql.Printer).Status(ctx)` / `.Info(ctx)` — decoded 32-byte status
+- `(*ql.Printer).Configure(ctx, ql.Settings)` — apply device settings
+  (auto power off/on, stored in the printer's non-volatile memory)
 - `ql.BuildJobBytes(*Job)` / `ql.BuildJobsBytes([]Job)` — full raw command
   stream without a printer (dry-run)
 - `ql.ParseJobs([]byte)` — parse a job file (single object or array)
@@ -484,6 +508,12 @@ Per print job (section 3 of the reference):
   and cut-at-end are all exposed.
 - After printing, the daemon/CLI wait for the printer to report "printing
   completed" + "waiting to receive" phase change, so jobs are confirmed.
+- **Device settings** (auto power off/on, `ql570 config`) are not part of
+  the official command reference. They use the `ESC i U` command family
+  (`1B 69 55 41 00 {n}` for the auto power off timeout, `1B 69 55 70 00 {n}`
+  for auto power on), reverse-engineered from Brother's Printer Setting
+  Tool; the values persist in the printer across power cycles. No read-back
+  command is known, so settings are write-only.
 
 ## Permissions
 

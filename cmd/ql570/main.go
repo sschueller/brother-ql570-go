@@ -6,6 +6,7 @@
 //	ql570 print --text "SW-01 uplink" --length 40
 //	ql570 status
 //	ql570 info
+//	ql570 config --power-off 30
 //	ql570 serve --listen 0.0.0.0:9101
 //	ql570 version
 package main
@@ -42,6 +43,8 @@ func main() {
 		err = cmdStatus(os.Args[2:])
 	case "info":
 		err = cmdInfo(os.Args[2:])
+	case "config":
+		err = cmdConfig(os.Args[2:])
 	case "serve":
 		err = cmdServe(os.Args[2:])
 	case "version":
@@ -66,6 +69,8 @@ Usage:
   ql570 print [flags]            print a label (auto-discovers the printer)
   ql570 status [--device PATH]   show the 32-byte printer status
   ql570 info [--device PATH]     show model + media info
+  ql570 config [flags]           show or change device settings (auto power
+                                 off/on; without flags, list the options)
   ql570 serve [flags]            run the HTTP print daemon
   ql570 version                  print the version
 
@@ -121,6 +126,12 @@ print flags:
                            objects - one label per array entry)
   --device /dev/usb/lp0    printer device (default: auto-discover)
   --dry-run out.bin        write the raw command stream instead of printing
+
+config flags:
+  --power-off N            auto power off after N idle minutes: 0 (disabled)
+                           or 10-60 in steps of 10 (Brother default: 60)
+  --power-on=true|false    auto power on when the power cord is plugged in
+  --device /dev/usb/lp0    printer device (default: auto-discover)
 
 serve flags:
   --listen 0.0.0.0:9101   listen address (the web UI is served at /)
@@ -509,6 +520,67 @@ func cmdInfo(args []string) error {
 	printStatusDetail(st)
 	fmt.Fprintln(os.Stderr, "note: the QL-570 raster protocol does not expose firmware version or serial number")
 	return nil
+}
+
+// cmdConfig shows or changes device settings (auto power off/on) that are
+// stored in the printer's non-volatile memory. Without any setting flag it
+// lists the supported options. The commands are reverse-engineered from
+// Brother's Printer Setting Tool; there is no way to read the current
+// values back from the printer.
+func cmdConfig(args []string) error {
+	fs := flag.NewFlagSet("config", flag.ContinueOnError)
+	device := fs.String("device", "", "printer device path")
+	powerOff := fs.Int("power-off", 0, "auto power off after this many idle minutes (0 disables; 10-60 in steps of 10)")
+	powerOn := fs.Bool("power-on", false, "auto power on when the power cord is plugged in")
+	set, err := parseSetFlags(fs, args)
+	if err != nil {
+		return err
+	}
+
+	if !set["power-off"] && !set["power-on"] {
+		printConfigOptions()
+		return nil
+	}
+
+	var s ql.Settings
+	if set["power-off"] {
+		s.AutoPowerOffMinutes = powerOff
+	}
+	if set["power-on"] {
+		s.AutoPowerOn = powerOn
+	}
+	if err := s.Validate(); err != nil {
+		return err
+	}
+
+	ctx := signalContext()
+	p, err := ql.Open(*device)
+	if err != nil {
+		return err
+	}
+	defer p.Close()
+	if err := p.Configure(ctx, s); err != nil {
+		return err
+	}
+	fmt.Fprintln(os.Stderr, "device settings applied and verified; they are stored in the printer and survive power cycles")
+	return nil
+}
+
+func printConfigOptions() {
+	fmt.Println("ql570 config - device settings stored in the printer's non-volatile memory")
+	fmt.Println()
+	fmt.Println("Note: the QL-570 protocol cannot read the current values back;")
+	fmt.Println("these options are write-only.")
+	fmt.Println()
+	fmt.Println("option          values")
+	fmt.Println("--power-off     auto power off after idle time (Brother default: 60 minutes):")
+	for _, c := range ql.AutoPowerOffChoices {
+		fmt.Printf("                %-3d %s\n", c.Minutes, c.Name)
+	}
+	fmt.Println("--power-on      auto power on when the power cord is plugged in (default: off):")
+	fmt.Println("                true, false")
+	fmt.Println()
+	fmt.Println("example: ql570 config --power-off 0 --power-on=true")
 }
 
 func printStatusDetail(st *ql.Status) {
